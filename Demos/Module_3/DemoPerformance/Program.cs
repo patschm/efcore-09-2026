@@ -52,9 +52,9 @@ internal class Program
         // 5) Use Sql Server Profiles Tool (Tuning Advisor) to get advise for Indices
         var query = context.ProductGroups
             .Include(pg => pg.Products)
-                .ThenInclude(p => p.Brand).AsSplitQuery()
+                .ThenInclude(p => p.Brand)//.AsSplitQuery()
             .Include(pg => pg.Products)
-                .ThenInclude(p => p.Reviews).AsSplitQuery()
+                .ThenInclude(p => p.Reviews)//.AsSplitQuery()
             .TagWith("Very big one!");
        
         foreach(var group in query)
