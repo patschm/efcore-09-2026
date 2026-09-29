@@ -1,0 +1,30 @@
+@page
+@model WebShop.Web.Pages.IndexModel
+@{
+    ViewData["Title"] = "ACME";
+}
+
+<h1 class="mb-4">ACME</h1>
+
+@if (Model.TopLevelProductGroups.Count == 0)
+{
+    <p class="text-muted">No product groups yet.</p>
+}
+else
+{
+    <div class="row row-cols-3 g-4">
+        @foreach (var group in Model.TopLevelProductGroups)
+        {
+            <div class="col">
+                <a asp-page="/ProductGroups/Details" asp-route-id="@group.Id" class="text-decoration-none">
+                    <div class="card h-100 shadow-sm">
+                        <img src="@(group.ImageUrl ?? "/images/no-image-available.jpg")" class="card-img-top" alt="@group.Name">
+                        <div class="card-body">
+                            <h5 class="card-title text-dark">@group.Name</h5>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        }
+    </div>
+}

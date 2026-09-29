@@ -1,0 +1,121 @@
+<UserControl x:Class="WebShop.Tools.OpsConsole.Views.PostgresView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:WebShop.Tools.OpsConsole.Models">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}">
+            <TextBlock Text="Postgres" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,12"
+                       Text="Two ways to run Postgres, matching the two this repo already uses: a real managed Azure Database for PostgreSQL Flexible Server, or a plain container - exactly what k8s/04-postgres.yaml runs in-cluster on AKS, just running locally via Docker instead." />
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                <RadioButton Content="Azure Database for PostgreSQL" Margin="0,0,16,0" VerticalAlignment="Center"
+                             IsChecked="{Binding HostingMode, Converter={StaticResource EnumToBool}, ConverterParameter={x:Static models:PostgresHostingMode.AzureFlexibleServer}}" />
+                <RadioButton Content="Docker container (local)" VerticalAlignment="Center"
+                             IsChecked="{Binding HostingMode, Converter={StaticResource EnumToBool}, ConverterParameter={x:Static models:PostgresHostingMode.DockerContainer}}" />
+            </StackPanel>
+
+            <!-- Azure Flexible Server fields -->
+            <Grid Margin="0,0,0,8" Visibility="{Binding IsAzureMode, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Resource group" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="0" Grid.Column="1" Margin="0,2" IsEditable="True" IsTextSearchEnabled="True"
+                          ItemsSource="{Binding ResourceGroups}" Text="{Binding ResourceGroup, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Location" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,2"
+                          ItemsSource="{Binding EuropeanRegions}" DisplayMemberPath="DisplayName" SelectedValuePath="Name"
+                          SelectedValue="{Binding Location}" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Server name" VerticalAlignment="Center" />
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ServerName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+            </Grid>
+
+            <!-- Docker container fields -->
+            <Grid Margin="0,0,0,8" Visibility="{Binding IsContainerMode, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Container name" VerticalAlignment="Center" />
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ContainerName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Host port" VerticalAlignment="Center" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ContainerPort, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Volume name" VerticalAlignment="Center" />
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding VolumeName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+            </Grid>
+
+            <!-- Shared fields -->
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Admin login" VerticalAlignment="Center" />
+                <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding AdminLogin, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Admin password" VerticalAlignment="Center" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding AdminPassword, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,4,2" />
+                <Button Grid.Row="1" Grid.Column="2" Content="Generate" Padding="8,0" Command="{Binding GeneratePasswordCommand}" />
+            </Grid>
+
+            <Button Content="Create" Width="140" HorizontalAlignment="Left" Margin="0,4" Padding="0,4"
+                    Command="{Binding CreateCommand}" />
+
+            <Separator Margin="0,8" />
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="140" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Database name" VerticalAlignment="Center" />
+                <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding DatabaseName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Dump file (.sql)" VerticalAlignment="Center" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding DumpFilePath, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,4,2" />
+                <Button Grid.Row="1" Grid.Column="2" Content="Browse..." Padding="8,0" Command="{Binding BrowseDumpFileCommand}" />
+            </Grid>
+            <Button Content="Restore" Width="140" HorizontalAlignment="Left" Margin="0,4" Padding="0,4"
+                    Command="{Binding RestoreCommand}" />
+
+            <Separator Margin="0,8" />
+
+            <CheckBox Content="Also remove the volume (deletes all data)" Margin="0,0,0,4"
+                      IsChecked="{Binding RemoveVolumeOnDelete}"
+                      Visibility="{Binding IsContainerMode, Converter={StaticResource BoolToVisibility}}" />
+            <Button Content="Delete" Width="140" HorizontalAlignment="Left" Margin="0,4" Padding="0,4"
+                    Foreground="DarkRed" Command="{Binding DeleteCommand}" />
+
+            <TextBlock Text="Working..." FontStyle="Italic" Margin="0,12,0,0"
+                       Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

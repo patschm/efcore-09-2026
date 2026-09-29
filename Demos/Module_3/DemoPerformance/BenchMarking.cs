@@ -1,7 +1,5 @@
 ﻿using BenchmarkDotNet.Attributes;
-using Microsoft.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,26 +14,9 @@ public class BenchMarking
 {
     public static string connectionString = @"Server=.\SQLEXPRESS;Database=ShopDatabase;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=False";
 
-    [Benchmark]
-    public ProductContext NormalInit()
-    {
-        var optionsBuilder = new DbContextOptionsBuilder<ProductContext>();
-        optionsBuilder.UseSqlServer(connectionString);
-        var options = optionsBuilder.Options;
-        var context = new ProductContext(options);
-        return context;
-    }
-
-    [Benchmark]
-    public ProductContext NormalCompiledModelInit()
-    {
-        var optionsBuilder = new DbContextOptionsBuilder<ProductContext>();
-        optionsBuilder.UseSqlServer(connectionString);
-        optionsBuilder.UseModel(ProductContextModel.Instance);
-        var options = optionsBuilder.Options;
-        var context = new ProductContext(options);
-        return context;
-    }
+    // NormalInit/NormalCompiledModelInit moved to ModelInitBenchmarks.cs - comparing DbContext
+    // construction cost needs a cold-start setup to be meaningful, which doesn't fit this class's
+    // repeated-loop job (see that file's comment for why).
 
     [Benchmark]
     public List<ProductGroup> NormalQuery()

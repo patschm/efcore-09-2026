@@ -1,0 +1,50 @@
+@page
+@model WebShop.Web.Pages.Admin.UsersModel
+@{
+    ViewData["Title"] = "Manage review permissions";
+}
+
+<h1 class="mb-4">Manage review permissions</h1>
+
+<table class="table table-sm align-middle">
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Display name</th>
+            <th>Can create reviews</th>
+            <th>Can administer reviews</th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var user in Model.Users)
+    {
+        <tr>
+            <td>@user.Email</td>
+            <td>@user.DisplayName</td>
+            <td>
+                <form method="post" asp-page-handler="@(user.CanCreate ? "Revoke" : "Grant")">
+                    <input type="hidden" name="userId" value="@user.Id" />
+                    <input type="hidden" name="permission" value="reviews:create" />
+                    <button type="submit" class="btn btn-sm @(user.CanCreate ? "btn-outline-danger" : "btn-outline-success")">
+                        @(user.CanCreate ? "Revoke" : "Grant")
+                    </button>
+                </form>
+            </td>
+            <td>
+                <form method="post" asp-page-handler="@(user.CanAdminister ? "Revoke" : "Grant")">
+                    <input type="hidden" name="userId" value="@user.Id" />
+                    <input type="hidden" name="permission" value="reviews:administer" />
+                    <button type="submit" class="btn btn-sm @(user.CanAdminister ? "btn-outline-danger" : "btn-outline-success")">
+                        @(user.CanAdminister ? "Revoke" : "Grant")
+                    </button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<p class="text-muted small">
+    Changes take effect for the affected user within 30 minutes automatically (ASP.NET Core Identity's
+    default security-stamp refresh interval), or immediately the next time they log in.
+</p>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] - ACME</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="~/css/site.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-sm navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" asp-page="/Index">ACME</a>
+            <div class="d-flex align-items-center ms-auto">
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    @if (User.HasClaim("permission", "reviews:administer"))
+                    {
+                        <a asp-page="/Admin/Users" class="btn btn-outline-light btn-sm me-3">Manage users</a>
+                    }
+                    <span class="navbar-text text-white me-3">Hi, @User.Identity.Name</span>
+                    <form method="post" asp-page="/Account/Logout" asp-route-returnUrl="@Context.Request.Path">
+                        <button type="submit" class="btn btn-outline-light btn-sm">Log out</button>
+                    </form>
+                }
+                else
+                {
+                    <a asp-page="/Account/Login" class="btn btn-outline-light btn-sm me-2">Log in</a>
+                    <a asp-page="/Account/Register" class="btn btn-light btn-sm">Register</a>
+                }
+            </div>
+        </div>
+    </nav>
+    <main class="container pb-5">
+        @RenderBody()
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

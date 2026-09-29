@@ -11,7 +11,7 @@ public class Merk
         Produkten = new HashSet<Produkt>();
     }
     [Key]
-    public long Id { get; set; }
+    public BrandId Id { get; set; }
     [Column("Name")]
     public string? Naam { get; set; }
     public string? Website { get; set; }

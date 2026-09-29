@@ -20,6 +20,7 @@ internal class ProductContext : DbContext
         {
             conf.ToTable("Brands");
             conf.HasKey("Id");
+            //conf.Property(x=>x.Id).HasConversion<BrandIdConverter>(); // See ConfigureConventions
             conf.Property(x => x.Naam).HasColumnName("Name");
             conf.Property(x=>x.Timestamp).IsRowVersion().IsConcurrencyToken();
             conf.HasMany(b => b.Produkten)
@@ -33,7 +34,8 @@ internal class ProductContext : DbContext
             conf.HasKey("Id");
             conf.Property(x => x.Naam).HasColumnName("Name");
             conf.Property(x => x.Afbeelding).HasColumnName("Image");
-            conf.Property(x => x.MerkId).HasColumnName("BrandId");
+            //conf.Property(x => x.MerkId).HasColumnName("BrandId");
+            //conf.Property(x=>x.MerkId).HasColumnName("BrandId").HasConversion<BrandIdConverter>();
             conf.Property(x => x.Timestamp).IsRowVersion().IsConcurrencyToken();
         });
 #if false
@@ -56,5 +58,9 @@ internal class ProductContext : DbContext
             conf.HasCheckConstraint("constraint_check", "[Id] > 0", b => b.HasName("CK_Id"));
         });
 #endif
+    }
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<BrandId>().HaveConversion<BrandIdConverter>();
     }
 }

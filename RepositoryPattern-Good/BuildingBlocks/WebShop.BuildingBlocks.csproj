@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharedKernel\WebShop.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Api/, Cosmos/ and Cosmos.Tests/ hold sibling projects (WebShop.BuildingBlocks.Api,
+         WebShop.BuildingBlocks.Cosmos, WebShop.BuildingBlocks.Cosmos.Tests) - exclude them so
+         their code doesn't get pulled into this plain class library's default glob. -->
+    <Compile Remove="Api/**/*.cs" />
+    <Compile Remove="Cosmos/**/*.cs" />
+    <Compile Remove="Cosmos.Tests/**/*.cs" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

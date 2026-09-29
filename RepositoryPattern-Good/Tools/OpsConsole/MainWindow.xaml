@@ -1,0 +1,89 @@
+<Window x:Class="WebShop.Tools.OpsConsole.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:WebShop.Tools.OpsConsole.ViewModels"
+        xmlns:views="clr-namespace:WebShop.Tools.OpsConsole.Views"
+        Title="WebShop Ops Console" Height="820" Width="980" MinHeight="600" MinWidth="800">
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="200" />
+        </Grid.RowDefinitions>
+
+        <!-- Account / login bar -->
+        <Border Grid.Row="0" BorderBrush="Gray" BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock Text="Checking sign-in state..." VerticalAlignment="Center"
+                               Visibility="{Binding IsCheckingAuth, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock VerticalAlignment="Center" FontWeight="Bold"
+                               Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVisibility}}">
+                        <Run Text="Signed in:" />
+                        <Run Text="{Binding CurrentAccount.UserName, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center"
+                               Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVisibility}}"
+                               Text="{Binding CurrentAccount.SubscriptionName, Mode=OneWay, StringFormat='Subscription: {0}'}" />
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="DarkRed" FontWeight="Bold"
+                               Text="Not signed in - use Login below before running anything."
+                               Visibility="{Binding ShowNotSignedInWarning, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+
+                <ComboBox Grid.Column="1" Width="220" Margin="0,0,8,0"
+                          ItemsSource="{Binding Subscriptions}" DisplayMemberPath="Name"
+                          SelectedItem="{Binding SelectedSubscription}"
+                          Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVisibility}}" />
+                <Button Grid.Column="2" Content="Use subscription" Margin="0,0,8,0" Padding="8,2"
+                        Command="{Binding UseSelectedSubscriptionCommand}"
+                        Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVisibility}}" />
+                <StackPanel Grid.Column="3" Orientation="Horizontal">
+                    <Button Content="Login" Padding="12,2" Command="{Binding LoginCommand}"
+                            IsEnabled="{Binding IsSigningIn, Converter={StaticResource InverseBool}}"
+                            Visibility="{Binding IsSignedIn, Converter={StaticResource InverseBoolToVisibility}}" />
+                    <Button Content="Logout" Padding="12,2" Command="{Binding LogoutCommand}"
+                            Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Feature tabs -->
+        <TabControl Grid.Row="1" IsEnabled="{Binding IsSignedIn}">
+            <TabItem Header="Cosmos DB">
+                <views:CosmosView DataContext="{Binding Cosmos}" />
+            </TabItem>
+            <TabItem Header="Postgres">
+                <views:PostgresView DataContext="{Binding Postgres}" />
+            </TabItem>
+            <TabItem Header="AKS">
+                <views:AksView DataContext="{Binding Aks}" />
+            </TabItem>
+            <TabItem Header="Azure Container Apps">
+                <views:AcaView DataContext="{Binding Aca}" />
+            </TabItem>
+        </TabControl>
+
+        <!-- Shared log -->
+        <GroupBox Grid.Row="2" Header="Log" Margin="0,8,0,0">
+            <ListBox x:Name="LogListBox" ItemsSource="{Binding Log.Lines}" FontFamily="Consolas" FontSize="11"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="0" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+            </ListBox>
+        </GroupBox>
+    </Grid>
+</Window>

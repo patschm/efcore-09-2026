@@ -1,0 +1,39 @@
+# Local dev collector: every service (the five .NET apps and the embedding container) sends all
+# three signals here over OTLP, and this fans them out to wherever they're actually usable -
+# Jaeger has no logs/metrics ingestion, so those go to the "debug" exporter (printed to this
+# container's own stdout - `docker compose logs otel-collector`) instead of being dropped.
+# This is also the template for what would run in AKS: same collector, same receiver, just
+# different exporters (e.g. Azure Monitor, Loki, Tempo) in the pipelines below.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  otlphttp/jaeger:
+    endpoint: http://jaeger:4318
+    tls:
+      insecure: true
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

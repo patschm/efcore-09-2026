@@ -1,0 +1,141 @@
+name: webshop
+
+# Postgres itself is NOT defined here - it keeps running as the existing standalone
+# "postgres-local" container, reachable from these containers via host.docker.internal. Only
+# Web still uses it (ASP.NET Identity - logins). Catalog/Pricing/Reviews/Search read/write a
+# real Azure Cosmos DB account instead (WEBSHOP_COSMOS_CONNECTION below, from a local .env file -
+# see .gitignore - never committed). Only the six .NET services + embedding model are composed.
+services:
+  # Local trace/log backend - see observability/otel-collector-config.yaml for how signals are
+  # routed. Every app service below points OTEL_EXPORTER_OTLP_ENDPOINT at otel-collector, never
+  # directly at jaeger.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    ports:
+      - "16686:16686" # UI - http://localhost:16686
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    depends_on:
+      - jaeger
+
+  catalog:
+    build:
+      context: .
+      dockerfile: Catalog/Api/Dockerfile
+    ports:
+      - "5101:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # Postgres wiring, kept for an easy revert (Program.cs/csproj comment out the same way) -
+      # not active while CosmosDb__ConnectionString below is what Program.cs actually reads.
+      # ConnectionStrings__Catalog: Host=host.docker.internal;Port=5432;Database=webshop;Username=postgres;Password=postgres
+      CosmosDb__ConnectionString: ${WEBSHOP_COSMOS_CONNECTION}
+      CosmosDb__DatabaseName: webshop
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    depends_on:
+      - otel-collector
+
+  pricing:
+    build:
+      context: .
+      dockerfile: Pricing/Api/Dockerfile
+    ports:
+      - "5102:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # ConnectionStrings__Pricing: Host=host.docker.internal;Port=5432;Database=webshop;Username=postgres;Password=postgres
+      CosmosDb__ConnectionString: ${WEBSHOP_COSMOS_CONNECTION}
+      CosmosDb__DatabaseName: webshop
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    depends_on:
+      - otel-collector
+
+  reviews:
+    build:
+      context: .
+      dockerfile: Reviews/Api/Dockerfile
+    ports:
+      - "5103:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # ConnectionStrings__Reviews: Host=host.docker.internal;Port=5432;Database=webshop;Username=postgres;Password=postgres
+      CosmosDb__ConnectionString: ${WEBSHOP_COSMOS_CONNECTION}
+      CosmosDb__DatabaseName: webshop
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    depends_on:
+      - otel-collector
+
+  # Real model server behind Search's IEmbeddingClient - see Search/EmbeddingServer/README.md.
+  # CPU build by default (handles most cases); swap dockerfile to Dockerfile.embed.gpu and add
+  # `deploy: resources: reservations: devices: [{capabilities: [gpu]}]` if a GPU is available -
+  # but see that Dockerfile's comment: it can't be instrumented with OpenTelemetry the same way
+  # (no Python process in that image), so these OTEL_* vars would have no effect there.
+  # Requires downloading the model into Search/EmbeddingServer first - see that README.
+  embedding:
+    build:
+      context: Search/EmbeddingServer
+      dockerfile: Dockerfile.embed.cpu
+    ports:
+      - "8005:8000"
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    depends_on:
+      - otel-collector
+
+  search:
+    build:
+      context: .
+      dockerfile: Search/Api/Dockerfile
+    ports:
+      - "5104:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # ConnectionStrings__Search: Host=host.docker.internal;Port=5432;Database=webshop;Username=postgres;Password=postgres
+      CosmosDb__ConnectionString: ${WEBSHOP_COSMOS_CONNECTION}
+      CosmosDb__DatabaseName: webshop
+      Embedding__Url: http://embedding:8000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    depends_on:
+      - embedding
+      - otel-collector
+
+  web:
+    build:
+      context: .
+      dockerfile: Web/Dockerfile
+    ports:
+      - "5100:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Identity: Host=host.docker.internal;Port=5432;Database=webshop;Username=postgres;Password=postgres
+      # Talks to sibling containers by service name over the compose-managed network,
+      # rather than the localhost:510x ports used when running each app with `dotnet run`.
+      Services__Catalog: http://catalog:8080
+      Services__Pricing: http://pricing:8080
+      Services__Reviews: http://reviews:8080
+      Services__Search: http://search:8080
+      # (Search itself already builds its Embedding__Url from the `embedding` service, above.)
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - catalog
+      - pricing
+      - reviews
+      - search
+      - otel-collector

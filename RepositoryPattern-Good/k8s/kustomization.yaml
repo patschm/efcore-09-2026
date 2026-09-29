@@ -1,0 +1,64 @@
+# Kustomize (bundled into kubectl itself - `kubectl apply -k <dir>`, no separate binary to
+# install) is the one piece of templating this folder uses, and it's here for exactly one
+# job: parametrizing the six `image:` lines below without hand-editing every Deployment file
+# whenever you switch registries or bump a version tag. Everything else about this folder is
+# still plain YAML applied with `kubectl apply -f` - see k8s/README.md's "Deploy" section for
+# both ways of applying it and how they differ.
+#
+# How it works: `resources` below is just "every file in this folder" (order doesn't matter to
+# Kustomize the way it did for `kubectl apply -f`'s namespace-must-exist-first requirement - it
+# builds one combined document and lets the API server sort out ordering). The `images` transformer
+# then rewrites any `image:` field in that combined output whose repository matches `name` below,
+# replacing it with `newName`/`newTag` - so the values here are the actual source of truth for
+# which image each Deployment runs, and the `image:` lines inside 10-catalog.yaml etc. are really
+# just fallback defaults for anyone applying those files directly with `-f` instead of `-k`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 00-namespace.yaml
+  - 01-secrets.yaml
+  - 02-configmap.yaml
+  - 03-cert-manager-issuers.yaml
+  - 04-postgres.yaml
+  - 10-catalog.yaml
+  - 11-pricing.yaml
+  - 12-reviews.yaml
+  - 13-search.yaml
+  - 14-embedding.yaml
+  - 15-web.yaml
+
+# One entry per service. To point at a different registry entirely (say, your own ACR instead of
+# this training subscription's psrepo), change `newName` on all six - `name` must stay matched to
+# whatever's literally written in each Deployment's `image:` line, since that's what Kustomize
+# matches against, not what you're renaming it to. To ship a new version, bump the matching
+# `newTag` here rather than hunting down the one Deployment file that mentions it.
+#
+# Tag scheme: `v<N>-<provider>`, e.g. `v7-cosmos`. All five app images (embedding excluded - it
+# has no persistence provider of its own) share one version number, bumped together on every push
+# even for a single-service fix, so "what's running" is one number to check, not five. The
+# `-cosmos`/`-postgres`/`-sqlserver` suffix names which WebShopProvider (see Directory.Build.props)
+# the image was actually built with - a real, compile-time difference (different Infrastructure
+# project baked in). Dapr-vs-direct is deliberately NOT part of the tag: it's a runtime choice
+# (DAPR_HTTP_PORT's presence - see DaprServiceInvocation.cs), the same image works either way, and
+# whether it's active for a given Deployment is visible in that Deployment's own
+# dapr.io/enabled annotation below, not in the image.
+images:
+  - name: psrepo.azurecr.io/webshop-catalog
+    newName: psrepo.azurecr.io/webshop-catalog
+    newTag: v7-cosmos
+  - name: psrepo.azurecr.io/webshop-pricing
+    newName: psrepo.azurecr.io/webshop-pricing
+    newTag: v7-cosmos
+  - name: psrepo.azurecr.io/webshop-reviews
+    newName: psrepo.azurecr.io/webshop-reviews
+    newTag: v7-cosmos
+  - name: psrepo.azurecr.io/webshop-search
+    newName: psrepo.azurecr.io/webshop-search
+    newTag: v7-cosmos
+  - name: psrepo.azurecr.io/webshop-embedding
+    newName: psrepo.azurecr.io/webshop-embedding
+    newTag: v2
+  - name: psrepo.azurecr.io/webshop-web
+    newName: psrepo.azurecr.io/webshop-web
+    newTag: v7-cosmos

@@ -1,0 +1,115 @@
+# Reviews: same shape as Catalog/Pricing (see 10-catalog.yaml), but with one real difference -
+# it needs the shared JWT signing key too. Web mints access tokens (see
+# Web/Identity/JwtTokenService.cs) that Reviews validates (see Reviews/Api/Program.cs's
+# AddJwtBearer setup) before honoring a review submission or an admin action - both sides read
+# the exact same three values out of the SAME Secret object (webshop-jwt-signing, defined once in
+# 01-secrets.yaml), which is what makes "shared secret between two services" actually work here:
+# there's only ever one place the key is set, so it can't drift between them.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reviews
+  namespace: webshop
+  labels:
+    app: reviews
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: reviews
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: reviews
+      # See 10-catalog.yaml for what these mean.
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "reviews"
+        dapr.io/app-port: "8080"
+    spec:
+      containers:
+        - name: reviews
+          image: psrepo.azurecr.io/webshop-reviews:v7-cosmos
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # Postgres wiring - commented out, not deleted (see 10-catalog.yaml for the full
+            # explanation of this pattern). Reviews now runs on Cosmos.
+            # - name: ConnectionStrings__Reviews
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: webshop-postgres-connections
+            #       key: ConnectionStrings__Reviews
+            - name: CosmosDb__ConnectionString
+              valueFrom:
+                secretKeyRef:
+                  name: webshop-cosmos-connection
+                  key: CosmosDb__ConnectionString
+            # Three separate env vars sourced from three keys in the SAME Secret - unlike
+            # `envFrom` (see the ConfigMap below, or Catalog's example), `secretKeyRef` always
+            # names one key at a time, which is exactly why three lines are needed here instead
+            # of one `envFrom` entry that would otherwise be simpler.
+            - name: Jwt__SigningKey
+              valueFrom:
+                secretKeyRef:
+                  name: webshop-jwt-signing
+                  key: SigningKey
+            - name: Jwt__Issuer
+              valueFrom:
+                secretKeyRef:
+                  name: webshop-jwt-signing
+                  key: Issuer
+            - name: Jwt__Audience
+              valueFrom:
+                secretKeyRef:
+                  name: webshop-jwt-signing
+                  key: Audience
+          envFrom:
+            - configMapRef:
+                name: webshop-common-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reviews
+  namespace: webshop
+spec:
+  type: ClusterIP
+  selector:
+    app: reviews
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

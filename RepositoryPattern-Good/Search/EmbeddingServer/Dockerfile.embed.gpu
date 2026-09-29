@@ -1,0 +1,84 @@
+# GPU variant. See Dockerfile.embed.cpu for a CPU-only build of the same embedding model
+# (which doesn't need any of this: llama_cpp.server is fine once there's no GPU dispatch to
+# fail at).
+#
+# Multi-stage build: compile llama.cpp's native `llama-server` from source in a CUDA
+# devel image, then copy just the binary + shared libs into a slim CUDA runtime image.
+#
+# Why not `pip install llama-cpp-python[server]`: the prebuilt `cu124` wheel crashes with
+# SIGILL on CPUs without AVX-512 (this repo's AMD EPYC host CPUs only have AVX2) — the
+# wheel was compiled with an AVX-512 instruction hard-baked into ggml's CPU backend init,
+# unrelated to CUDA. Building from source with -DGGML_AVX512=OFF fixes that.
+#
+# Why not `llama_cpp.server` (the Python wrapper) even after fixing the crash: its
+# /v1/embeddings codepath never actually dispatches compute to the GPU, despite reporting
+# GPU offload as active (layers "assigned to CUDA0", VRAM allocated, flag honored. Every
+# diagnostic says yes, but nvidia-smi shows 0% utilization during real requests). llama.cpp's
+# own native `llama-server` C++ binary has none of this problem: confirmed ~22x faster
+# (4.2s vs ~94s for a 128-item batch) with real GPU utilization. See ../../gpu-embedding-notes.md
+# for the full investigation.
+#
+# OpenTelemetry: unlike Dockerfile.embed.cpu, this variant can't get zero-code instrumentation
+# the same way. There's no Python process here at all (this image has no Python interpreter,
+# and llama-server is a native C++ binary with no OTel SDK compiled in). Recompiling llama.cpp
+# with an OTel C++ SDK is realistically out of scope. What you still get without touching this
+# file: every call Search.Api makes INTO this container is already traced (AddHttpClientInstrumentation,
+# see BuildingBlocks/Api/ObservabilityExtensions.cs). A client-side span with URL/duration/status,
+# just with no matching server-side span to nest it under. llama-server also has its own `--metrics`
+# flag exposing Prometheus-format metrics on /metrics, if request-rate/latency numbers (not traces)
+# are enough. An OTel Collector's prometheus receiver can scrape that and forward it as OTLP.
+
+ARG CUDA_TAG=12.8.1
+# T4 = 75, A10 = 86 (Ampere). Match to whatever GPU this actually deploys on.
+ARG CUDA_ARCH=75
+
+FROM nvidia/cuda:${CUDA_TAG}-devel-ubuntu22.04 AS builder
+ARG CUDA_ARCH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 https://github.com/ggml-org/llama.cpp.git /src
+
+WORKDIR /src
+# ggml-cuda's VMM code path needs the real driver's libcuda.so.1 at *link* time (not just
+# runtime). The CUDA devel image doesn't ship it. It's normally injected via --gpus all /
+# nvidia-container-toolkit, which only applies to `docker run`, not `docker build`, unless
+# the daemon's default-runtime is set to nvidia (this build assumes that's configured on
+# the build host. See notes in gpu-embedding-notes.md). With that, the real driver library
+# is visible during the build exactly like a bare-metal build, no stub/symlink needed.
+RUN cmake -B build \
+      -DGGML_CUDA=on \
+      -DGGML_NATIVE=OFF \
+      -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_AVX512=OFF \
+      -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH} \
+      -DLLAMA_CURL=OFF \
+    && cmake --build build --target llama-server -j"$(nproc)"
+
+FROM nvidia/cuda:${CUDA_TAG}-runtime-ubuntu22.04 AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libgomp1 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# All the shared libs llama-server needs (libggml*, libllama*) live alongside the
+# executable in build/bin with an $ORIGIN rpath. Copy the whole directory.
+COPY --from=builder /src/build/bin/ /app/
+
+# Model baked in for production: build once, push the tagged image to a registry, and
+# every deploy target pulls a self-contained image with no shared volume needed.
+COPY Qwen3-Embedding-0.6B-Q8_0.gguf /models/model.gguf
+
+ENV MODEL_PATH=/models/model.gguf
+ENV PORT=8000
+# The binary's RPATH points at the builder stage's build path, not /app. The shared
+# libs (libggml*, libllama*) sit right next to the binary but won't be found without this.
+ENV LD_LIBRARY_PATH=/app
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=60s \
+  CMD curl -f http://localhost:${PORT}/v1/models || exit 1
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "/app/llama-server --host 0.0.0.0 --port ${PORT} --model ${MODEL_PATH} -ngl 99 --embedding --pooling last -c 8192 -b 8192 -ub 8192"]

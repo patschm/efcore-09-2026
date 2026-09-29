@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- One-off ETL tool, not a deployed service: reads the legacy flat Postgres schema directly
+         and reuses each context's Cosmos document adapters/domain factories to build exactly the
+         documents the real repositories would produce, rather than re-deriving a parallel mapping. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Cosmos\WebShop.BuildingBlocks.Cosmos.csproj" />
+    <ProjectReference Include="..\..\Catalog\Infrastructure\Cosmos\WebShop.Catalog.Infrastructure.Cosmos.csproj" />
+    <ProjectReference Include="..\..\Pricing\Infrastructure\Cosmos\WebShop.Pricing.Infrastructure.Cosmos.csproj" />
+    <ProjectReference Include="..\..\Reviews\Infrastructure\Cosmos\WebShop.Reviews.Infrastructure.Cosmos.csproj" />
+    <ProjectReference Include="..\..\Search\Infrastructure\Cosmos\WebShop.Search.Infrastructure.Cosmos.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+  </ItemGroup>
+
+</Project>

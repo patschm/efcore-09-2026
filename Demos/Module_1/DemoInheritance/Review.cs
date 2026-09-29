@@ -1,6 +1,6 @@
 ﻿namespace DemoInheritance;
 
-public class Review
+public abstract class Review
 {
     public long Id { get; set; }
     public string? Text { get; set; }

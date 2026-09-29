@@ -1,0 +1,29 @@
+@model ProductSpecificationDto
+
+<tr>
+    <th scope="row" class="text-nowrap align-middle">
+        @Model.Name
+        @if (!string.IsNullOrWhiteSpace(Model.Explanation))
+        {
+            <button type="button" class="btn btn-sm btn-link p-0 ms-1 align-baseline"
+                    data-bs-toggle="modal" data-bs-target="#explanation-@Model.SpecificationDefinitionId"
+                    title="What does this mean?">
+                <img src="/images/info.png" alt="What does this mean?" width="16" height="16">
+            </button>
+            <div class="modal fade" id="explanation-@Model.SpecificationDefinitionId" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">@Model.Name</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-0">@Model.Explanation</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </th>
+    <td class="align-middle">@string.Join(", ", Model.Values)</td>
+</tr>

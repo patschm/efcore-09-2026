@@ -1,0 +1,3 @@
+# Nothing to exclude here (unlike ContainerHost's copy of this file, this folder never holds
+# the unrelated chat model) - kept so BuildKit's per-Dockerfile ignore-file convention still
+# finds a matching file for `-f Dockerfile.embed.cpu`.

@@ -68,7 +68,7 @@ internal class Program
         
         // Modify
         var reviewer = context.Reviewers.FirstOrDefault();
-        reviewer!.Credentials = reviewer.Credentials! with { PasswordHash = "SHA256" };
+        reviewer!.Credentials = reviewer.Credentials! with { PasswordHash = "SHA256" }; // Records are immutable by default so replace here
         context.SaveChanges();
 
         ShowData(context.Reviewers.ToList());

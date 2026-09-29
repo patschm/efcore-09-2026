@@ -1,0 +1,83 @@
+# HTTPS for Web (see 15-web.yaml's Ingress) needs two things this cluster doesn't have yet:
+#   1. cert-manager itself - the controller that watches Ingress/Certificate objects and actually
+#      talks to a certificate authority. NOT installed by this file (it's cluster-wide infra, the
+#      same category as KEDA/Dapr/the app-routing add-on, all provisioned in infra/, not k8s/) -
+#      install it once per cluster with the upstream manifest before applying this file:
+#        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+#        kubectl get pods -n cert-manager -w   # wait for cert-manager, cainjector, webhook all Running
+#   2. A ClusterIssuer - cert-manager's config for WHERE to get certificates from and HOW to prove
+#      domain ownership. This file defines three, for three different situations. 15-web.yaml's
+#      Ingress references exactly one of them by name (cert-manager.io/cluster-issuer annotation);
+#      switching which certificate Web gets is just editing that one annotation.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  # Works immediately, with nothing else required - no real DNS name, no waiting on a public CA,
+  # no rate limits. Useful for confirming the whole Ingress -> cert-manager -> Secret -> HTTPS
+  # pipeline actually works before involving the public internet at all. The catch, and the
+  # reason this is NOT what a real deployment uses: the certificate is signed by a CA this
+  # cluster made up on the spot, which no browser or OS trusts - visiting the site still shows
+  # a "not secure" / certificate-warning page, just with TLS actually happening underneath it.
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  # Let's Encrypt's TEST certificate authority - real domain validation, real HTTPS, but signed by
+  # a CA browsers deliberately do NOT trust, so you still get a certificate-warning page. The
+  # entire point of this issuer is that Let's Encrypt's real (letsencrypt-prod, below) CA has a
+  # hard rate limit (~5 duplicate certificates per exact domain name per week) and staging doesn't -
+  # so every dry run of "does my DNS/HTTP-01 setup actually work" belongs here first. Once a
+  # staging certificate issues successfully, switching the Ingress annotation to letsencrypt-prod
+  # is the only change needed to get a real, browser-trusted certificate for the same domain.
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    # Let's Encrypt requires SOME email on file, purely for expiry-notice / abuse-contact purposes -
+    # it doesn't verify you actually receive mail there, but it DOES reject obviously-fake domains
+    # outright (registration fails immediately with "contact email has forbidden domain" for this
+    # exact admin@example.com placeholder) - replace it with a real inbox you control before
+    # applying, or the ACME account never registers and every Certificate using this issuer stays
+    # stuck at "Referenced issuer does not have a Ready status condition" indefinitely.
+    email: admin@example.com
+    privateKeySecretRef:
+      # Where cert-manager stores this issuer's ACME ACCOUNT key (registration with Let's
+      # Encrypt itself) - unrelated to the per-certificate TLS keys, which live in whatever
+      # secretName the Ingress's tls block names.
+      name: letsencrypt-staging-account-key
+    solvers:
+      # HTTP-01: Let's Encrypt makes an HTTP request to http://<your-domain>/.well-known/acme-challenge/<token>
+      # and checks the response - proof you (or at least something reachable at that domain's IP)
+      # control it. cert-manager automates this entirely: it temporarily edits the Ingress to
+      # route that one path to a small solver Pod it spins up itself, then removes it once the
+      # challenge passes. The one hard requirement this places on you: the domain in the
+      # Ingress's tls.hosts / rules.host must already resolve, over the public internet, to this
+      # ingress controller's public IP - Let's Encrypt cannot validate a name that doesn't
+      # resolve, or one that only resolves on a private network.
+      - http01:
+          ingress:
+            # Must match the Ingress's spec.ingressClassName exactly, or cert-manager's solver
+            # Pod never gets routed to and the challenge times out.
+            ingressClassName: webapprouting.kubernetes.azure.com
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  # The real thing: browser-trusted certificates from Let's Encrypt's production CA. Identical
+  # to letsencrypt-staging above except for the ACME server URL and using a separate account key -
+  # switch to this only after a staging certificate has already issued successfully for the same
+  # domain, to avoid burning production's tighter rate limit on a setup that isn't working yet.
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: webapprouting.kubernetes.azure.com

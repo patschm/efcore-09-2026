@@ -1,0 +1,103 @@
+<UserControl x:Class="WebShop.Tools.OpsConsole.Views.AksView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}">
+            <TextBlock Text="AKS" FontSize="16" FontWeight="Bold" Margin="0,0,0,8" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,12"
+                       Text="Runs the full sequence used manually to stand this cluster up: infra/main.bicep, cluster credentials, cert-manager, (optionally) build/push all six images, apply k8s/ with real secrets substituted into a scratch copy, patch Web's Ingress hostname once the public IP is known, then wait for rollouts and the TLS certificate." />
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="160" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Resource group" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="0" Grid.Column="1" Margin="0,2" IsEditable="True" IsTextSearchEnabled="True"
+                          ItemsSource="{Binding ResourceGroups}" Text="{Binding ResourceGroup, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Location" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,2"
+                          ItemsSource="{Binding EuropeanRegions}" DisplayMemberPath="DisplayName" SelectedValuePath="Name"
+                          SelectedValue="{Binding Location}" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Cluster name" VerticalAlignment="Center" />
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ClusterName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="ACR name" VerticalAlignment="Center" />
+                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding AcrName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="ACR resource group" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="4" Grid.Column="1" Margin="0,2" IsEditable="True" IsTextSearchEnabled="True"
+                          ItemsSource="{Binding ResourceGroups}" Text="{Binding AcrResourceGroup, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="Image tag (5 .NET services)" VerticalAlignment="Center" />
+                <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding ImageTag, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+
+                <TextBlock Grid.Row="6" Grid.Column="0" Text="Embedding image tag" VerticalAlignment="Center" />
+                <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding EmbeddingImageTag, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+            </Grid>
+
+            <CheckBox Content="Build and push images before deploying" IsChecked="{Binding BuildAndPushImages}" Margin="0,4,0,12" />
+
+            <TextBlock Text="Cosmos account this deployment should point at (its key is used for the k8s Secret):" Margin="0,0,0,4" TextWrapping="Wrap" />
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="160" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Cosmos account name" VerticalAlignment="Center" />
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding CosmosAccountName, UpdateSourceTrigger=PropertyChanged}" Margin="0,2" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Cosmos resource group" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,2" IsEditable="True" IsTextSearchEnabled="True"
+                          ItemsSource="{Binding ResourceGroups}" Text="{Binding CosmosResourceGroup, UpdateSourceTrigger=PropertyChanged}" />
+            </Grid>
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="160" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Postgres password" VerticalAlignment="Center" />
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding PostgresPassword, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,4,2" />
+                <Button Grid.Row="0" Grid.Column="2" Content="Generate" Padding="8,0" Command="{Binding GeneratePostgresPasswordCommand}" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="JWT signing key" VerticalAlignment="Center" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding JwtSigningKey, UpdateSourceTrigger=PropertyChanged}" Margin="0,2,4,2" />
+                <Button Grid.Row="1" Grid.Column="2" Content="Generate" Padding="8,0" Command="{Binding GenerateJwtSigningKeyCommand}" />
+            </Grid>
+
+            <Button Content="Setup &amp; Deploy" Width="160" HorizontalAlignment="Left" Margin="0,8" Padding="0,6" FontWeight="Bold"
+                    Command="{Binding SetupAndDeployCommand}" />
+
+            <TextBlock Text="Working - this can take several minutes (Postgres/cluster provisioning, image builds, waiting for the TLS certificate)..."
+                       FontStyle="Italic" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+
+            <TextBlock Margin="0,12,0,0" FontWeight="Bold"
+                       Visibility="{Binding HasResultUrl, Converter={StaticResource BoolToVisibility}}">
+                <Run Text="Ready: " />
+                <Run Text="{Binding ResultUrl, Mode=OneWay}" />
+            </TextBlock>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

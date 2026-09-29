@@ -1,0 +1,45 @@
+# CPU variant. See Dockerfile.embed.gpu for why the GPU build can't use this same simple
+# approach (llama_cpp.server's /v1/embeddings never actually dispatches to the GPU). That bug
+# is specifically about GPU dispatch: with no GPU involved here at all, the Python wrapper's
+# CPU codepath is fine, so this mirrors Dockerfile.prod's structure rather than compiling
+# llama.cpp from source.
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y build-essential cmake curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install llama-cpp-python[server] --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+# Zero-code OpenTelemetry: llama_cpp.server's `[server]` extra is a FastAPI/Starlette app run
+# under Uvicorn, so opentelemetry-bootstrap can find and install the matching instrumentation
+# packages on its own. No change to llama_cpp.server's own source needed. This is only possible
+# because this variant is Python; Dockerfile.embed.gpu runs a native C++ binary with no Python
+# and no OTel SDK, so it can't be instrumented the same way. See the comment there.
+RUN pip install opentelemetry-distro opentelemetry-exporter-otlp \
+    && opentelemetry-bootstrap -a install
+
+# Model baked in, same as Dockerfile.embed.gpu. This is a small (0.6B) model, so unlike the
+# chat model there's no separate "dev, mounted at runtime" variant.
+COPY Qwen3-Embedding-0.6B-Q8_0.gguf /models/model.gguf
+
+ENV MODEL_PATH=/models/model.gguf
+ENV N_THREADS=4
+ENV PORT=8000
+
+# OTEL_EXPORTER_OTLP_ENDPOINT is deliberately not set here. It's supplied at `docker run`/
+# compose time (see docker-compose.yml) so this image isn't hard-wired to one collector address.
+# Left unset, the SDK falls back to http://localhost:4318 per the OpenTelemetry spec and just
+# logs failed export attempts rather than failing to start.
+ENV OTEL_SERVICE_NAME=webshop-embedding
+ENV OTEL_TRACES_EXPORTER=otlp
+ENV OTEL_METRICS_EXPORTER=otlp
+ENV OTEL_LOGS_EXPORTER=otlp
+ENV OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+ENV OTEL_PYTHON_LOG_CORRELATION=true
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=60s \
+  CMD curl -f http://localhost:${PORT}/v1/models || exit 1
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "opentelemetry-instrument python -m llama_cpp.server --host 0.0.0.0 --port ${PORT} --model ${MODEL_PATH} --n_threads ${N_THREADS} --embedding true"]

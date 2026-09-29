@@ -1,4 +1,4 @@
-﻿namespace DemoEntityFramework;
+﻿namespace DemoRawQueries;
 
 public class Brand
 {

@@ -1,5 +1,4 @@
-﻿using DemoEntityFramework;
-using Microsoft.Data.SqlClient;
+﻿using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace DemoRawQueries;
@@ -16,6 +15,8 @@ internal class Program
 
     
 
+    // FromSqlRaw: plain SQL string + explicit parameters you supply yourself (a SqlParameter here).
+    // Composable (no LINQ chained after it in this demo), but parameterization discipline is on you.
     private static void BasicRaw()
     {
         var optionsBuilder = new DbContextOptionsBuilder();
@@ -31,6 +32,7 @@ internal class Program
             Console.WriteLine(brand.Name);
         }
     }
+    // FromSqlInterpolated: C# interpolated string, auto-parameterized by EF (safe by construction).
     private static void Mixing()
     {
         var optionsBuilder = new DbContextOptionsBuilder();

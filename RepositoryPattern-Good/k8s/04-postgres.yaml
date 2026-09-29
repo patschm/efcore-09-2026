@@ -1,0 +1,144 @@
+# Postgres itself, running IN the cluster - a deliberate change from what infra/README.md
+# originally suggested (pointing at an external Azure Database for PostgreSQL Flexible Server).
+# Running it as a workload here instead means it needs real persistent storage that survives a
+# Pod being deleted/rescheduled - that's the whole reason this is a StatefulSet with a
+# volumeClaimTemplate, not a Deployment like every other file in this folder. See the comments
+# below for what that buys you over a Deployment + PersistentVolumeClaim written out separately.
+#
+# Image is pgvector/pgvector:pg17, not the plain postgres image - the seed data restored into
+# this (see k8s/README.md's "Restoring the seed data") runs `CREATE EXTENSION IF NOT EXISTS
+# vector`, which only exists if the pgvector extension is compiled into the server; the plain
+# image doesn't have it. Version 17 specifically because what matters for restoring a plain-SQL
+# dump isn't the version it was ORIGINALLY dumped from - it's the version of the `pg_dump` binary
+# that produced the file, since that's what decides which SET statements and syntax go in the
+# preamble. A dump made by pg_dump 17 emits `SET transaction_timeout = 0;`, a GUC that doesn't
+# exist before Postgres 17 - restoring that file into a v16 server fails immediately with
+# "unrecognized configuration parameter", before a single real table is created. Match the
+# restore target to pg_dump's version, not the other way around.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webshop-postgres-admin
+  namespace: webshop
+type: Opaque
+stringData:
+  # The postgres image uses this to set the superuser's password on first initialization ONLY -
+  # changing this value later does NOT change the running database's actual password (it already
+  # has one, on disk, in the PersistentVolume). This has to match whatever's actually in the
+  # `Password=` field of every connection string in 01-secrets.yaml - two separate Secrets
+  # agreeing on one value by convention, not by any Kubernetes-enforced link between them.
+  POSTGRES_PASSWORD: "REPLACE_WITH_A_REAL_PASSWORD"
+---
+# A "headless" Service (clusterIP: None) - rather than getting its own load-balanced ClusterIP
+# like every other Service in this folder, this just tells Kubernetes DNS to return the actual
+# Pod IP(s) backing it directly. For a single-replica StatefulSet the practical difference is
+# small (there's only one Pod to return either way), but it's the idiomatic pairing with a
+# StatefulSet - each Pod gets its own stable DNS name (postgres-0.postgres.webshop.svc.cluster.local),
+# which matters once a StatefulSet has more than one replica and callers need to reach a
+# SPECIFIC one (e.g. always the primary) rather than "any of them" the way a normal Service's
+# load-balancing assumes. The plain Service name `postgres` still resolves and works fine for
+# the connection strings in 01-secrets.yaml, which don't care which exact Pod they land on.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: webshop
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: webshop
+spec:
+  # Must name the headless Service above - this is what lets each replica get a stable DNS
+  # identity (postgres-0, postgres-1, ...) instead of a random Pod name like a Deployment's.
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg17
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: webshop
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: webshop-postgres-admin
+                  key: POSTGRES_PASSWORD
+            # Without this, the postgres image initializes its data directory directly at the
+            # mount point below - and Azure Disk (like most cloud block storage) writes a
+            # `lost+found` directory into a freshly formatted filesystem's root, which trips up
+            # Postgres's "is this directory truly empty?" check on first startup. Using a
+            # subdirectory of the mount as PGDATA sidesteps that entirely.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          # exec probes (run a command inside the container, success = exit code 0) rather than
+          # httpGet - Postgres speaks the wire protocol, not HTTP, so there's no URL to probe.
+          # pg_isready ships with every postgres image specifically for this purpose.
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+  # What actually makes this different from a Deployment: a volumeClaimTemplate. A Deployment's
+  # Pods all share whatever volumes you list in the Pod template - fine for stateless containers,
+  # useless for a database, where two replicas can never safely share one disk. A StatefulSet
+  # instead creates ONE PersistentVolumeClaim PER REPLICA from this template (postgres-data-
+  # postgres-0, postgres-data-postgres-1, ...), and - critically - keeps the SAME PVC bound to the
+  # SAME Pod identity across restarts/reschedules. Delete this Pod and Kubernetes recreates
+  # postgres-0 and reattaches the exact same disk; it does not hand it a fresh empty one.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        # ReadWriteOnce: only one node can mount this volume at a time - the norm for block
+        # storage (Azure Disk here) and completely fine for a single-writer database. Contrast
+        # with ReadWriteMany, which Azure Disk cannot do at all (Azure Files can, but is
+        # unsuitable for a database's random-access I/O pattern).
+        accessModes: ["ReadWriteOnce"]
+        # managed-csi is one of AKS's built-in StorageClasses (`kubectl get storageclass`) -
+        # provisioning this PVC creates a REAL Azure Managed Disk (Standard SSD by default) via
+        # the Azure Disk CSI driver, entirely automatically; nothing about this had to be
+        # provisioned in infra/ ahead of time. managed-csi-premium is the same idea on Premium
+        # SSD, worth it once this database's I/O is under enough real load to matter, not for
+        # data this size.
+        storageClassName: managed-csi
+        resources:
+          requests:
+            storage: 20Gi

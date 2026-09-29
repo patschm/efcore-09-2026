@@ -4,6 +4,7 @@ namespace DemoLifetime;
 
 internal class DIApp : IHostedService
 {
+    // Watch out! Single instance of ProductContext. AddHostedService is singleton
     private ProductContext _productContext;
 
     public DIApp(ProductContext productContext)
@@ -23,6 +24,6 @@ internal class DIApp : IHostedService
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        return Task.CompletedTask;
     }
 }

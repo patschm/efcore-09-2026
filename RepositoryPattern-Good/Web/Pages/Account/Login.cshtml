@@ -1,0 +1,25 @@
+@page
+@model WebShop.Web.Pages.Account.LoginModel
+@{
+    ViewData["Title"] = "Log in";
+}
+
+<h1 class="mb-4">Log in</h1>
+
+<div asp-validation-summary="All" class="text-danger"></div>
+
+<form method="post" class="col-md-6">
+    <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+    <div class="mb-3">
+        <label asp-for="Input.Email" class="form-label">Email</label>
+        <input asp-for="Input.Email" class="form-control">
+        <span asp-validation-for="Input.Email" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.Password" class="form-label">Password</label>
+        <input asp-for="Input.Password" class="form-control">
+        <span asp-validation-for="Input.Password" class="text-danger"></span>
+    </div>
+    <button type="submit" class="btn btn-primary">Log in</button>
+    <a asp-page="/Account/Register" asp-route-returnUrl="@Model.ReturnUrl" class="btn btn-link">Need an account?</a>
+</form>

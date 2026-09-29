@@ -1,0 +1,196 @@
+# Catalog: the first of six services in this folder. This file explains every field in full -
+# the other five (11-pricing.yaml, 12-reviews.yaml, 13-search.yaml, 14-embedding.yaml,
+# 15-web.yaml) point back here for anything that's identical, and only spell out what's actually
+# different for that service.
+#
+# A Deployment and a Service are two different, complementary Kubernetes objects, both included
+# here since they're always used together:
+#   - Deployment: "keep N copies (replicas) of this container running, and know how to roll out
+#     a new version without downtime." It manages Pods (the actual running containers) for you -
+#     if one crashes, the Deployment's controller notices and starts a replacement.
+#   - Service: a stable network name + IP for a *set* of Pods, chosen by label, since individual
+#     Pods come and go (crash, get rescheduled, roll out to a new version) and their IPs change
+#     every time. Other pods should never talk to a Pod's IP directly - they talk to the Service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog
+  namespace: webshop
+  labels:
+    app: catalog
+spec:
+  # Two copies, so a single crashing/restarting Pod doesn't mean the Catalog API is briefly
+  # entirely unreachable, and so a rolling update (see `strategy` below) always has at least one
+  # old-version Pod still serving traffic while the new one starts up.
+  replicas: 2
+
+  # How the Deployment finds "its" Pods among every Pod in the namespace: anything whose labels
+  # match this selector. This has to be a subset of template.metadata.labels below - Kubernetes
+  # will reject the Deployment otherwise (a Deployment that can't identify its own Pods can't
+  # manage them).
+  selector:
+    matchLabels:
+      app: catalog
+
+  # The default rollout strategy, spelled out explicitly for visibility rather than left
+  # implicit: replace Pods gradually rather than all at once (`Recreate`, the other option,
+  # tears down every old Pod before starting any new one - full downtime during every deploy).
+  # maxUnavailable: 0 means it won't take a Pod down until its replacement is already Ready
+  # (see readinessProbe below for what "Ready" means) - always at least `replicas` Pods serving
+  # traffic, even mid-rollout. maxSurge: 1 caps how many EXTRA Pods (beyond `replicas`) can exist
+  # temporarily while rolling out.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  # The Pod template - what a "copy" of this Deployment actually looks like. Everything from here
+  # down describes ONE Pod; `replicas: 2` above is what turns that into two running copies.
+  template:
+    metadata:
+      # Must match (or be a superset of) spec.selector.matchLabels above - this is how the
+      # Deployment recognizes Pods it created as "mine". The Service below uses the exact same
+      # label to find these Pods too, completely independently of the Deployment.
+      labels:
+        app: catalog
+      # Opts this Pod into the Dapr sidecar injector (the cluster extension infra/main.bicep
+      # enables) - dapr.io/app-id is the name Web's DaprServiceInvocation.ConfigureServiceInvocation
+      # (BuildingBlocks/Api) invokes this service by, dapr.io/app-port tells the sidecar which
+      # container port to forward invocations to. No code inside this container needs to know
+      # about Dapr at all - the sidecar terminates the Dapr protocol and proxies plain HTTP to
+      # /health, /product-groups, etc. exactly as if Web had called this Pod directly.
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "catalog"
+        dapr.io/app-port: "8080"
+    spec:
+      containers:
+        - name: catalog
+          # psrepo.azurecr.io is this training subscription's existing Azure Container Registry
+          # (see infra/main.bicepparam's existingAcrName example) - swap this for your own
+          # registry's login server if you provisioned a new one instead. `:v7-cosmos` is an
+          # explicit, immutable version tag - never `:latest`, which silently means "whatever was
+          # pushed most recently" and makes it impossible to know (or roll back to) what's
+          # actually running from the manifest alone. See kustomization.yaml's `images` section
+          # for what the `-cosmos` suffix means and why Dapr isn't part of the tag.
+          image: psrepo.azurecr.io/webshop-catalog:v7-cosmos
+
+          ports:
+            # Purely informational/documentation by itself (Kubernetes doesn't actually firewall
+            # traffic based on this) - but required for the Service below to refer to this port
+            # by name (`targetPort: http`) instead of repeating the number "8080" in two places.
+            - name: http
+              containerPort: 8080
+
+          # Two different ways of sourcing environment variables, shown side by side on purpose:
+          env:
+            # (1) A single value pulled from a Secret by key - see 01-secrets.yaml. Only this one
+            # variable comes from the Secret; nothing else in that Secret leaks into this
+            # container's environment.
+            #
+            # Postgres wiring - commented out, not deleted, matching Program.cs/the .csproj/
+            # docker-compose.yml for this same service (see feedback_comment_dont_delete_provider_
+            # code in project memory). Catalog now runs on Cosmos - see CosmosDb__ConnectionString
+            # below (CosmosDb__DatabaseName comes from 02-configmap.yaml's envFrom instead, since
+            # it isn't secret).
+            # - name: ConnectionStrings__Catalog
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: webshop-postgres-connections
+            #       key: ConnectionStrings__Catalog
+            - name: CosmosDb__ConnectionString
+              valueFrom:
+                secretKeyRef:
+                  name: webshop-cosmos-connection
+                  key: CosmosDb__ConnectionString
+          envFrom:
+            # (2) EVERY key in a ConfigMap, injected as environment variables all at once - see
+            # 02-configmap.yaml. Simpler when a whole map of settings is meant to be shared
+            # as-is, at the cost of not being able to see every individual variable name here.
+            - configMapRef:
+                name: webshop-common-config
+
+          # What the container is expected to need, and the hard ceiling it's not allowed to
+          # cross. "requests" is what the Kubernetes scheduler reserves when deciding which node
+          # to place this Pod on (a node with less than 100m CPU / 128Mi memory free won't be
+          # considered) - "limits" is enforced at runtime: exceed the memory limit and the
+          # container is killed and restarted (OOMKilled); exceed the CPU limit and it's just
+          # throttled, not killed. "m" = millicores, so 100m is a tenth of one CPU core.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+          # Three different questions Kubernetes can ask a container, all backed by the same
+          # /health endpoint (added specifically for this - see Catalog/Api/Program.cs's
+          # `app.MapHealthChecks("/health")`), because the questions themselves are still
+          # different even when the check behind them is the same:
+          #
+          # startupProbe: "has this container finished starting up yet?" While this is failing,
+          # liveness/readiness probes below are NOT run at all - protects a slow-starting
+          # container (this one isn't especially slow, but the pattern matters more than the
+          # numbers here) from being killed by a liveness probe timeout before it's even had a
+          # chance to start. failureThreshold * periodSeconds = how long a startup is tolerated
+          # (30 * 2s = 60s here) before this is considered failed and the container is restarted.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+
+          # livenessProbe: "is this container still working, or has it wedged/deadlocked?"
+          # Failing this gets the container KILLED AND RESTARTED - a deliberately blunt, drastic
+          # response, so this should only ever fail for a genuinely stuck process. That's also
+          # why AddHealthChecks() in Program.cs deliberately does NOT check Postgres connectivity
+          # here (see the comment on that call) - Postgres being briefly unreachable is not the
+          # same problem as this specific process being stuck, and shouldn't cause a restart loop.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+
+          # readinessProbe: "should this specific Pod currently receive traffic?" Failing this
+          # does NOT restart the container - it just pulls this Pod out of the Service's load
+          # balancing rotation until it passes again. This is the one that actually matters for
+          # "no downtime during a rollout" (see strategy.rollingUpdate.maxUnavailable above): a
+          # new Pod only starts receiving real traffic once its readiness probe passes.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+
+---
+# A ClusterIP Service (the default type - "ClusterIP" isn't even strictly necessary to spell out
+# below, included for clarity) is only reachable from INSIDE the cluster, never from the public
+# internet - exactly right for Catalog, since only Web and Search ever call it directly (compare
+# with 15-web.yaml's Service, which deliberately IS reachable externally).
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog
+  namespace: webshop
+spec:
+  type: ClusterIP
+  # Every Pod whose labels match this becomes a load-balancing target for this Service - in this
+  # case, both replicas from the Deployment above (since they share the label app: catalog).
+  # There's no direct link between a Service and "its" Deployment at all - just this shared label
+  # convention, which is why the labels have to actually match for any of this to work.
+  selector:
+    app: catalog
+  ports:
+    - name: http
+      port: 8080
+      # port vs targetPort: `port` is what callers use (http://catalog:8080/...) - `targetPort`
+      # is the actual container port traffic gets forwarded to. They're the same number here,
+      # but don't have to be - a Service can expose port 80 while forwarding to a container's
+      # port 8080, for instance.
+      targetPort: http

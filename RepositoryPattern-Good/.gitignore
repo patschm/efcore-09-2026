@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+
+# Real secrets for local docker-compose runs (e.g. WEBSHOP_COSMOS_CONNECTION) - never committed.
+.env
+
+# Downloaded model weights (Search/EmbeddingServer) - large binaries, not source; see that
+# folder's README for the download step each dev/deploy needs to run themselves.
+*.gguf

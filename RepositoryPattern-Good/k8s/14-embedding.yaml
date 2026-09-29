@@ -1,0 +1,117 @@
+# The embedding server: the odd one out among these six - it's a Python process
+# (llama_cpp.server, see Search/EmbeddingServer/Dockerfile.embed.cpu and its README) running a
+# real, CPU-bound LLM inference workload, not a thin ASP.NET Core API. That shows up in several
+# real differences from the other five files, called out below as they come up. It's still just
+# a Deployment + Service pair underneath - see 10-catalog.yaml for what every shared field means.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding
+  namespace: webshop
+  labels:
+    app: embedding
+spec:
+  # Only one replica, deliberately, unlike every other service here (2 each). Each replica of
+  # this container holds a full copy of the embedding model in memory (hundreds of MB - see
+  # requests.memory below) and does real CPU work per request, so doubling replicas roughly
+  # doubles both the memory footprint and the node capacity needed, for a service that (unlike
+  # Catalog/Pricing/etc.) has no external traffic of its own - only Search calls it. If embedding
+  # request volume ever became a real bottleneck, this is exactly the kind of CPU-bound workload
+  # KEDA (already enabled on this cluster - see infra/main.bicep) is good at scaling out based on
+  # actual load; not set up here, since one replica already suits what this project needs today.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embedding
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: embedding
+      # See 10-catalog.yaml for what these mean - app-port 8000 here, not 8080, matching this
+      # container's own port below (it's llama_cpp.server/Uvicorn, not ASP.NET Core). The sidecar
+      # doesn't care that the app behind it is Python, not .NET - it just proxies plain HTTP to
+      # whatever's listening on app-port, same as for the five other services.
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "embedding"
+        dapr.io/app-port: "8000"
+    spec:
+      containers:
+        - name: embedding
+          # Built from Search/EmbeddingServer/Dockerfile.embed.cpu (the GPU variant,
+          # Dockerfile.embed.gpu, needs a GPU-enabled node pool this cluster doesn't provision -
+          # see that file's own comments for why it's a materially different build, not just a
+          # flag).
+          image: psrepo.azurecr.io/webshop-embedding:v2
+          ports:
+            - name: http
+              containerPort: 8000
+
+          # Just one variable here, unlike the .NET services - no envFrom/webshop-common-config,
+          # since that ConfigMap's ASPNETCORE_ENVIRONMENT setting means nothing to a Python
+          # process, and its OTEL_EXPORTER_OTLP_ENDPOINT is deliberately the gRPC (port 4317)
+          # form the .NET OTLP exporter defaults to - this container needs the HTTP form instead
+          # (port 4318), because OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf is baked into its
+          # Dockerfile already (see Search/EmbeddingServer/README.md's "OpenTelemetry" section).
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4318"
+
+          # A CPU-bound model server needs meaningfully more than the thin ASP.NET Core APIs
+          # above - these numbers mirror Search/EmbeddingServer/README.md's own local `docker run
+          # --cpus="4" --memory="4g"` example, scaled down slightly since this only ever serves
+          # Search's traffic, not a person directly.
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+
+          # Loading the model into memory at startup takes real time (see the Dockerfile's own
+          # HEALTHCHECK --start-period=60s for the equivalent Docker-level concept) - a much more
+          # generous startupProbe than the .NET services' (60 * 5s = up to 5 minutes tolerated,
+          # vs. their 60s) reflects that genuinely different startup cost, not an arbitrary
+          # bigger number. Reuses the same /v1/models endpoint the Dockerfile's own HEALTHCHECK
+          # already probes - see llama_cpp.server's own OpenAI-compatible API surface, not
+          # anything added for Kubernetes specifically (unlike the .NET services' /health, which
+          # was).
+          startupProbe:
+            httpGet:
+              path: /v1/models
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /v1/models
+              port: http
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: http
+            periodSeconds: 10
+            failureThreshold: 2
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedding
+  namespace: webshop
+spec:
+  type: ClusterIP
+  selector:
+    app: embedding
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

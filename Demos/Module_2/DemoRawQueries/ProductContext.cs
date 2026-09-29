@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-namespace DemoEntityFramework;
+namespace DemoRawQueries;
 
 internal class ProductContext : DbContext
 {

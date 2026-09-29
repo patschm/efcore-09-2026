@@ -1,0 +1,37 @@
+# A ConfigMap is the non-secret sibling of the Secret in 01-secrets.yaml - same idea (external
+# configuration, kept out of the container image so the same image can run in different
+# environments), but readable in plain text by anyone who can `kubectl get configmap`. Anything
+# that would be embarrassing or dangerous to leak belongs in a Secret instead - see that file's
+# comments for why that distinction is more about RBAC/visibility than actual encryption.
+#
+# This one holds the settings every .NET service shares (Web included). Search/EmbeddingServer's
+# own container (see k8s/14-embedding.yaml) is NOT one of its consumers - it's a Python process
+# with entirely different environment variables (OTEL_EXPORTER_OTLP_PROTOCOL differs too: the
+# .NET services default to OTLP-over-gRPC on port 4317, the embedding container's Dockerfile
+# bakes in OTLP-over-HTTP on port 4318 - see Search/EmbeddingServer/README.md's "OpenTelemetry"
+# section for why).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webshop-common-config
+  namespace: webshop
+data:
+  # Controls things like whether unhandled exceptions render a detailed developer page - always
+  # "Production" outside your own machine. docker-compose.yml uses "Development" instead, since
+  # that only ever runs on your own workstation.
+  ASPNETCORE_ENVIRONMENT: "Production"
+
+  # otel-collector.observability.svc.cluster.local is Kubernetes' own DNS naming for
+  # "the Service named otel-collector, in the observability namespace" - resolvable from any pod
+  # in the cluster, in any namespace, unlike the short "otel-collector" form (which only resolves
+  # for pods that are themselves IN the observability namespace). Port 4317 is OTLP-over-gRPC,
+  # which is what BuildingBlocks/Api/ObservabilityExtensions.cs's UseOtlpExporter() call defaults
+  # to when only OTEL_EXPORTER_OTLP_ENDPOINT is set (no _PROTOCOL override needed for .NET).
+  # See observability/azure/otel-collector.yaml for what's actually listening on the other end,
+  # and infra/README.md's "Wiring up the OTel Collector" section for how to deploy it.
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
+
+  # Read by Catalog/Pricing/Reviews/Search only (see AddXCosmosInfrastructure in each Program.cs) -
+  # harmless as an unused env var for Web/embedding, which don't read this key. Not secret, unlike
+  # the connection string itself (see webshop-cosmos-connection in 01-secrets.yaml).
+  CosmosDb__DatabaseName: "webshop"

@@ -10,7 +10,7 @@ public class Produkt
     [Column("Name")]
     public string? Naam { get; set; }
     [Column("BrandId")]
-    public long MerkId{ get; set; }
+    public BrandId MerkId{ get; set; }
     [Column("Image")]
     public string? Afbeelding { get; set; }
     [NotMapped]

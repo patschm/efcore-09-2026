@@ -1,0 +1,17 @@
+# A Namespace is Kubernetes' way of partitioning one cluster into separate "areas" - every other
+# object in this folder (Deployments, Services, ConfigMaps, Secrets) declares
+# `metadata.namespace: webshop` so they all land here, isolated from anything else that might be
+# running on the same cluster (like the `observability` namespace the OTel Collector lives in -
+# see observability/azure/otel-collector.yaml). Two objects can even share the exact same name as
+# long as they're in different namespaces; Kubernetes tells them apart by (namespace, name, kind).
+#
+# This has to exist BEFORE anything that references `namespace: webshop` - apply it first:
+#   kubectl apply -f k8s/00-namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webshop
+  labels:
+    # Purely descriptive - Kubernetes itself doesn't care about this label, but tools like
+    # `kubectl get namespaces -l app.kubernetes.io/part-of=webshop` or a dashboard can use it.
+    app.kubernetes.io/part-of: webshop

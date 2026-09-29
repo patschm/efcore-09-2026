@@ -1,0 +1,35 @@
+@page
+@model WebShop.Web.Pages.Account.RegisterModel
+@{
+    ViewData["Title"] = "Register";
+}
+
+<h1 class="mb-4">Create an account</h1>
+
+<div asp-validation-summary="All" class="text-danger"></div>
+
+<form method="post" class="col-md-6">
+    <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+    <div class="mb-3">
+        <label asp-for="Input.DisplayName" class="form-label">Display name</label>
+        <input asp-for="Input.DisplayName" class="form-control">
+        <span asp-validation-for="Input.DisplayName" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.Email" class="form-label">Email</label>
+        <input asp-for="Input.Email" class="form-control">
+        <span asp-validation-for="Input.Email" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.Password" class="form-label">Password</label>
+        <input asp-for="Input.Password" class="form-control">
+        <span asp-validation-for="Input.Password" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.ConfirmPassword" class="form-label">Confirm password</label>
+        <input asp-for="Input.ConfirmPassword" class="form-control">
+        <span asp-validation-for="Input.ConfirmPassword" class="text-danger"></span>
+    </div>
+    <button type="submit" class="btn btn-primary">Register</button>
+    <a asp-page="/Account/Login" asp-route-returnUrl="@Model.ReturnUrl" class="btn btn-link">Already have an account?</a>
+</form>

@@ -1,0 +1,229 @@
+# Web: the storefront BFF (Razor Pages) end users actually browse to - the only one of these six
+# Services deliberately reachable from outside the cluster (see its `type: LoadBalancer` below).
+# Same Deployment shape as Catalog/Pricing/etc. otherwise - see 10-catalog.yaml for what every
+# shared field means.
+#
+# The one thing genuinely different: a shared PersistentVolumeClaim for ASP.NET Core's Data
+# Protection key ring (see Program.cs's own comment on why - antiforgery tokens and auth cookies
+# from one replica are gibberish to another without it). This is ReadWriteMany on the azurefile-csi
+# storage class, NOT ReadWriteOnce on managed-csi like 04-postgres.yaml's disk - Azure Disk can
+# only ever be attached to one node at a time (fine for Postgres, which only ever has one replica
+# writing to it), but this volume needs to be mounted read-write by BOTH web Pods simultaneously,
+# possibly on two different nodes. Azure Files (an SMB/NFS network share, not a block device) is
+# what actually supports that.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: web-dataprotection-keys
+  namespace: webshop
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: azurefile-csi
+  resources:
+    requests:
+      # The key ring is a handful of small XML files - this is essentially the smallest Azure
+      # Files share the CSI driver will provision, not a real capacity planning number.
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: webshop
+  labels:
+    app: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: web
+      # See 10-catalog.yaml for what these mean. Web only ever CALLS other services via Dapr
+      # (through its own sidecar's localhost:DAPR_HTTP_PORT, see DaprServiceInvocation) - nothing
+      # invokes Web BY its app-id the way Web invokes "catalog"/"pricing"/etc., but every Pod on
+      # the Dapr mesh still needs dapr.io/enabled + an app-id/app-port pair to get a sidecar at
+      # all, caller or not.
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "web"
+        dapr.io/app-port: "8080"
+    spec:
+      containers:
+        - name: web
+          image: psrepo.azurecr.io/webshop-web:v7-cosmos
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: ConnectionStrings__Identity
+              valueFrom:
+                secretKeyRef:
+                  name: webshop-postgres-connections
+                  key: ConnectionStrings__Identity
+            - name: Jwt__SigningKey
+              valueFrom:
+                secretKeyRef:
+                  name: webshop-jwt-signing
+                  key: SigningKey
+            - name: Jwt__Issuer
+              valueFrom:
+                secretKeyRef:
+                  name: webshop-jwt-signing
+                  key: Issuer
+            - name: Jwt__Audience
+              valueFrom:
+                secretKeyRef:
+                  name: webshop-jwt-signing
+                  key: Audience
+
+            # Four more plain hardcoded values (see Search's Embedding__Url for why "plain
+            # value:" is sometimes the right call) - each one a Kubernetes Service's cluster-DNS
+            # short name (see 13-search.yaml's comment on the short vs. fully-qualified form),
+            # matching Web/appsettings.json's Services:Catalog/Pricing/Reviews/Search shape and
+            # docker-compose.yml's own Services__* env vars, just pointing at Kubernetes Service
+            # names instead of docker-compose service names. Web/Program.cs turns each of these
+            # into a typed HttpClient's BaseAddress.
+            - name: Services__Catalog
+              value: "http://catalog:8080"
+            - name: Services__Pricing
+              value: "http://pricing:8080"
+            - name: Services__Reviews
+              value: "http://reviews:8080"
+            - name: Services__Search
+              value: "http://search:8080"
+
+            # .NET's configuration binder maps an environment variable's "__<index>" suffix onto
+            # an array element - Identity__AdminEmails__0 becomes configuration key
+            # "Identity:AdminEmails:0", i.e. the first entry of the AdminEmails array
+            # Web/Identity/AdminClaimsSeeder.cs reads at startup to grant the reviews:administer
+            # claim. A second admin would be Identity__AdminEmails__1, and so on - there's no way
+            # to express "the whole array" as one env var the way stringData can for a Secret.
+            - name: Identity__AdminEmails__0
+              value: "testreviewer@example.com"
+          envFrom:
+            - configMapRef:
+                name: webshop-common-config
+          volumeMounts:
+            # Matches PersistKeysToFileSystem(new DirectoryInfo("/keys")) in Program.cs - both
+            # replicas mount the SAME PVC (see web-dataprotection-keys above), so both read/write
+            # the same key ring files.
+            - name: dataprotection-keys
+              mountPath: /keys
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+      volumes:
+        - name: dataprotection-keys
+          persistentVolumeClaim:
+            claimName: web-dataprotection-keys
+
+---
+# ClusterIP, not LoadBalancer, now that the Ingress below handles external exposure - Web no
+# longer needs (or gets) its own public IP/Azure Load Balancer. The Ingress and this Service talk
+# to each other purely by name/label, exactly like every other Service in this folder; the only
+# thing that made Web's Service special before (being reachable from outside the cluster) has
+# moved to the Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: webshop
+spec:
+  type: ClusterIP
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+
+---
+# The Ingress: HTTP(S) routing rules for traffic coming from OUTSIDE the cluster, evaluated by
+# whatever controller matches ingressClassName below - here, the AKS-managed NGINX controller
+# from the "app routing" add-on (infra/modules/aks.bicep's ingressProfile.webAppRouting), which
+# is what actually owns the public IP and Azure Load Balancer now (a LoadBalancer Service is
+# still involved underneath - it's just the Ingress controller's own Service, shared by every
+# Ingress in the cluster, instead of one per app). Compared to Web's old plain LoadBalancer
+# Service, this is what buys TLS termination and (if this project ever grows a second
+# externally-facing app) host/path-based routing sharing that one IP.
+#
+# TLS itself is NOT something the Ingress controller does on its own - the
+# cert-manager.io/cluster-issuer annotation below hands that off to cert-manager (see
+# 03-cert-manager-issuers.yaml, which must be installed AND applied first), which watches this
+# Ingress, notices the tls block naming a Secret that doesn't exist yet, and creates a Certificate
+# resource that drives getting one issued and stored there - entirely independent of anything
+# Kubernetes' own APIs know how to do.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  namespace: webshop
+  annotations:
+    # Which ClusterIssuer (see 03-cert-manager-issuers.yaml) cert-manager should use for this
+    # Ingress's certificate. Swapping between selfsigned-issuer / letsencrypt-staging /
+    # letsencrypt-prod is just editing this one line - nothing else here changes. Using
+    # selfsigned-issuer here (not letsencrypt-prod) since 03-cert-manager-issuers.yaml's
+    # letsencrypt-* issuers still carry the admin@example.com placeholder email, which Let's
+    # Encrypt rejects outright on registration - fine to switch once this has a real domain and a
+    # real inbox on file, not needed just to prove the Ingress -> TLS pipeline works.
+    cert-manager.io/cluster-issuer: selfsigned-issuer
+spec:
+  ingressClassName: webapprouting.kubernetes.azure.com
+  tls:
+    - hosts:
+        # REPLACE with a real DNS name that resolves to the app-routing add-on's public IP before
+        # switching to either letsencrypt-* issuer - Let's Encrypt validates over the public
+        # internet and cannot issue for a name that doesn't resolve (or resolves to the wrong
+        # place). Get that IP once the cluster + add-on exist with:
+        #   kubectl get svc -n app-routing-system nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+        # then either point real DNS at it, or - if you don't own a domain to spare - use that
+        # IP's nip.io name instead (e.g. IP 20.1.2.3 -> webshop.20.1.2.3.nip.io), which resolves
+        # publicly to exactly that IP with no DNS setup of your own required. Only selfsigned-
+        # issuer works with this example.com placeholder left as-is, since it never contacts the
+        # public internet to validate anything.
+        - webshop.132.220.28.15.nip.io
+      # Where cert-manager stores the issued certificate + private key once ready (created and
+      # kept up to date by cert-manager automatically - never create this Secret by hand). The
+      # Ingress controller reads it from here to terminate TLS for the host(s) listed above.
+      secretName: web-tls
+  rules:
+    - host: webshop.132.220.28.15.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 80

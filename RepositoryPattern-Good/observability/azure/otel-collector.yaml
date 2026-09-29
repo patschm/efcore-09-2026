@@ -1,0 +1,128 @@
+# In-cluster OTel Collector for AKS - the Azure counterpart to observability/otel-collector-config.yaml
+# (which fans out to a local Jaeger for docker-compose). Same otlp receiver, different exporter:
+# traces and logs go to Application Insights via the azuremonitor exporter (part of the
+# "contrib" distro, same image already used locally). Metrics are deliberately NOT routed here -
+# infra/main.bicep enables AKS's own managed-Prometheus add-on for those instead, since the
+# azuremonitor exporter's metrics support is comparatively immature. See infra/README.md.
+#
+# This is a plain Kubernetes manifest, not something infra/main.bicep applies - Bicep provisions
+# Azure resources, not cluster workloads. Apply it yourself once the cluster and the Application
+# Insights resource both exist:
+#
+#   az aks get-credentials --resource-group <rg> --name <cluster>
+#
+#   CONNECTION_STRING=$(az deployment group show --resource-group <rg> --name main \
+#     --query properties.outputs.appInsightsConnectionString.value -o tsv)
+#
+#   kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl create secret generic otel-collector-azuremonitor \
+#     --namespace observability \
+#     --from-literal=connection-string="$CONNECTION_STRING" \
+#     --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl apply -f observability/azure/otel-collector.yaml
+#
+# Then point every service's OTEL_EXPORTER_OTLP_ENDPOINT at
+# http://otel-collector.observability.svc.cluster.local:4317 (4318 for the embedding container,
+# same http/protobuf vs grpc distinction as docker-compose.yml).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: observability
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch: {}
+
+    exporters:
+      azuremonitor:
+        connection_string: ${env:APPLICATIONINSIGHTS_CONNECTION_STRING}
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [azuremonitor]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [azuremonitor]
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.111.0
+          args: ["--config=/etc/otel/config.yaml"]
+          env:
+            # The connection string itself is created out-of-band (see the comment above) -
+            # this manifest only ever references the Secret, never the value.
+            - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: otel-collector-azuremonitor
+                  key: connection-string
+          ports:
+            - containerPort: 4317
+              name: otlp-grpc
+            - containerPort: 4318
+              name: otlp-http
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observability
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318

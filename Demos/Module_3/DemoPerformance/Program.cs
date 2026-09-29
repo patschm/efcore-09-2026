@@ -1,10 +1,9 @@
-﻿using BenchmarkDotNet.Running;
+﻿using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Running;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 namespace DemoPerformance;
 
@@ -18,7 +17,13 @@ internal class Program
         //ConnectionPooling();
         //CompiledModels();
         //CompiledQueries();
-        BenchmarkSwitcher.FromTypes([typeof(BenchMarking)]).RunAll();
+        
+        // Benchmark only works when build in Release mode. Temporarily bypassing that requirement with
+        // DisableOptimizationsValidator. It lets this run from a normal (Debug) `dotnet run`. 
+        // It only skips the check on THIS host process. BenchmarkDotNet still builds and measures 
+        // the actual benchmarks in a separate, freshly Release-built child process regardless.
+        var config = ManualConfig.Create(DefaultConfig.Instance).WithOptions(ConfigOptions.DisableOptimizationsValidator);
+        BenchmarkSwitcher.FromTypes([typeof(BenchMarking), typeof(ModelInitBenchmarks)]).RunAll(config);
 
         //PerformanceCounters();
 
@@ -78,6 +83,10 @@ internal class Program
         var warmup = new ProductContext(options);
         warmup.Reviews.ToList();
 
+        // Created once, outside the loop - a fresh pool every iteration would never stay warm long
+        // enough to show pooling's actual benefit: reusing already-initialized contexts over time.
+        var factory = new PooledDbContextFactory<ProductContext>(options);
+
         var timers = new Dictionary<string, TimeSpan>() { { "nopool", TimeSpan.Zero }, { "pool", TimeSpan.Zero } };
         for (int j = 0; j< 20; j++)
         {
@@ -93,7 +102,6 @@ internal class Program
             timers["nopool"] += watch.Elapsed;
             watch.Reset();
 
-            var factory = new PooledDbContextFactory<ProductContext>(options);
             watch.Start();
             for (int i = 0; i < 100; i++)
             {
@@ -119,7 +127,7 @@ internal class Program
 
         var optionsBuilder2 = new DbContextOptionsBuilder<ProductContext>();
         optionsBuilder2.UseSqlServer(connectionString);
-        var options2 = optionsBuilder.Options;
+        var options2 = optionsBuilder2.Options;
 
         var timers = new Dictionary<string, TimeSpan>() { { "normal", TimeSpan.Zero }, { "compiled", TimeSpan.Zero } };
         for (int j = 0; j < 20; j++)

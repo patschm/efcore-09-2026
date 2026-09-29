@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A WPF desktop app that drives the same az/kubectl/docker/psql commands used manually
+       throughout this project's infra work - a GUI front end over infra/cosmos.bicep,
+       infra/postgres.bicep, infra/main.bicep, infra/aca.bicep, and k8s/, not a reimplementation
+       of any of it. Windows-only (net10.0-windows + UseWPF) - WPF has no cross-platform runtime,
+       unlike every other project in this solution. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>WebShop.Tools.OpsConsole</RootNamespace>
+    <AssemblyName>WebShop.Tools.OpsConsole</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Source-generator based MVVM ([ObservableProperty]/[RelayCommand]) - avoids hand-writing
+         INotifyPropertyChanged/ICommand boilerplate across five view models. -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+
+</Project>

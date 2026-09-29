@@ -1,6 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using System;
 
 namespace DemoComplexTypes;
 
@@ -19,15 +17,10 @@ internal class MyContext : DbContext
 
         modelBuilder.Entity<Reviewer>(conf =>
         {
-            // EF Core >= 8.0
-            // Complex type limitations in EF8 include:
-            //    Support collections of complex types. (Issue #31237)
-            //    Allow complex type properties to be null. (Issue #31376)
-            //    Map complex type properties to JSON columns. (Issue #31252)
-            //    Constructor injection for complex types. (Issue #31621)
-            //    Add seed data support for complex types. (Issue #31254)
-            //    Map complex type properties for the Cosmos provider. (Issue #31253)
-            //    Implement complex types for the in-memory database. (Issue #31464)
+            // Complex types were introduced in EF8 with several limitations (no collections, no
+            // nulls, no JSON mapping, no constructor binding, no seed data, no Cosmos/InMemory
+            // support). Most of that was lifted by EF9/EF10. Credentials is nullable by default
+            // now (optional complex property).
             conf.ComplexProperty(e => e.Credentials).IsRequired();
 
             // Primitive collection properties

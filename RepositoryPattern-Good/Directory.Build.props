@@ -1,0 +1,18 @@
+<Project>
+
+  <!-- Central switch for which persistence provider Catalog/Pricing/Reviews/Search's Api
+       projects compile against: Cosmos (default - what's actually deployed to docker-compose/AKS
+       today), Postgres, or SqlServer (previously wired only for Infrastructure.Tests' real-SQLite
+       mapping tests - now also a real, if fresh/schema-less, runtime option). Override per build:
+         dotnet build WebShop.slnx -p:WebShopProvider=Postgres
+         dotnet publish Catalog/Api -p:WebShopProvider=SqlServer
+       Each Api.csproj reads this to pick its Infrastructure ProjectReference + EF packages
+       (Cosmos needs neither) and to set the matching DefineConstants (COSMOS/POSTGRES/SQLSERVER)
+       each Program.cs switches on via #if. Nothing outside the four Api projects reads this -
+       Domain/Application/Infrastructure.Tests are provider-agnostic or already fixed to one
+       provider (SqlServer via a real SQLite :memory: engine) regardless of this switch. -->
+  <PropertyGroup>
+    <WebShopProvider Condition="'$(WebShopProvider)' == ''">Cosmos</WebShopProvider>
+  </PropertyGroup>
+
+</Project>
