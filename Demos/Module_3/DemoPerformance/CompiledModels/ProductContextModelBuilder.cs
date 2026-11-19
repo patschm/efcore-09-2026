@@ -4,12 +4,17 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 #pragma warning disable 219, 612, 618
-#nullable enable
+#nullable disable
 
 namespace DemoPerformance
 {
     public partial class ProductContextModel
     {
+        private ProductContextModel()
+            : base(skipDetectChanges: false, modelId: new Guid("de42413c-7398-4e26-924f-bab322d150ca"), entityTypeCount: 12)
+        {
+        }
+
         partial void Initialize()
         {
             var brand = BrandEntityType.Create(this);
@@ -47,7 +52,7 @@ namespace DemoPerformance
             ExpertReviewEntityType.CreateAnnotations(expertReview);
             WebReviewEntityType.CreateAnnotations(webReview);
 
-            AddAnnotation("ProductVersion", "6.0.8");
+            AddAnnotation("ProductVersion", "10.0.12");
             AddAnnotation("Relational:DefaultSchema", "Core");
             AddAnnotation("Relational:MaxIdentifierLength", 128);
             AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);

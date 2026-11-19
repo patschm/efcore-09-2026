@@ -9,21 +9,21 @@ namespace DemoPerformance;
 
 internal class Program
 {
-    public static string connectionString = @"Server=.\SQLEXPRESS;Database=ShopDatabase;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=False";
+    public static string connectionString = @"Server=.\SQLEXPRESS;Database=ProductCatalog;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=False";
 
     static void Main(string[] args)
     {
         //Diagnostics();
         //ConnectionPooling();
         //CompiledModels();
-        //CompiledQueries();
+        CompiledQueries();
         
         // Benchmark only works when build in Release mode. Temporarily bypassing that requirement with
         // DisableOptimizationsValidator. It lets this run from a normal (Debug) `dotnet run`. 
         // It only skips the check on THIS host process. BenchmarkDotNet still builds and measures 
         // the actual benchmarks in a separate, freshly Release-built child process regardless.
-        var config = ManualConfig.Create(DefaultConfig.Instance).WithOptions(ConfigOptions.DisableOptimizationsValidator);
-        BenchmarkSwitcher.FromTypes([typeof(BenchMarking), typeof(ModelInitBenchmarks)]).RunAll(config);
+        //var config = ManualConfig.Create(DefaultConfig.Instance).WithOptions(ConfigOptions.DisableOptimizationsValidator);
+        //BenchmarkSwitcher.FromTypes([typeof(BenchMarking), typeof(ModelInitBenchmarks)]).RunAll(config);
 
         //PerformanceCounters();
 
@@ -179,7 +179,7 @@ internal class Program
             watch.Start();
             for (int i = 0; i < 100; i++)
             {
-                var dt = query.ToList();        
+                var dt = query.ToList();
             }
             watch.Stop();
             timers["normal"] += watch.Elapsed;
@@ -188,12 +188,13 @@ internal class Program
             watch.Start();
             for (int i = 0; i < 100; i++)
             {
-                var dt = _compiled(context);
+                var dtl = _compiled(context);
+                //var dt = dtl.First();
             }
             watch.Stop();
             timers["compiled"] += watch.Elapsed;
         }
-        Console.WriteLine($"Without compiled models: It took on average {timers["normal"] / 20} seconds");
-        Console.WriteLine($"With compiled models: It took on average {timers["compiled"] / 20} seconds");
+        Console.WriteLine($"Without compiled queries: It took on average {timers["normal"] / 20} seconds");
+        Console.WriteLine($"With compiled queries: It took on average {timers["compiled"] / 20} seconds");
     }
 }

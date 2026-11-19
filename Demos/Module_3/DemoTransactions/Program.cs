@@ -1,6 +1,7 @@
 ﻿using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Transactions;
 
@@ -8,8 +9,8 @@ namespace DemoTransactions;
 
 internal class Program
 {
-    public static string connectionString = @"Server=.\SQLEXPRESS;Database=ShopDatabase;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=False";
-    public static string backupConnectionString = @"Server=.\SQLEXPRESS;Database=ShopDatabaseBackup;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=False";
+    public static string connectionString = @"Server=.\SQLEXPRESS;Database=ProductCatalog;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=False";
+    public static string backupConnectionString = @"Server=.\SQLEXPRESS;Database=ProductCatalogBackup;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=False";
     
     static void Main(string[] args)
     {
@@ -27,6 +28,7 @@ internal class Program
         // By default SaveChanges wraps all changes in a transaction
         var optionsBuilder = new DbContextOptionsBuilder<ProductContext>();
         optionsBuilder.UseSqlServer(connectionString);
+        optionsBuilder.LogTo(Console.WriteLine, LogLevel.Trace);
         var options = optionsBuilder.Options;
         var context = new ProductContext(options);
         
@@ -64,6 +66,7 @@ internal class Program
         var brand1 = new Brand { Name = "Brand 1", Website = "https://www.brand_1.nl" };
         var brand2 = new Brand { Name = "Brand 2", Website = "https://www.brand_2.nl" };//, Id=1 };
 
+       // var tx =connection.BeginTransaction();
         using (var tran = context.Database.BeginTransaction())
         {
             context.Brands.Add(brand1);
@@ -111,6 +114,7 @@ internal class Program
             }
 
             tran.Commit();
+            //command.Dispose();
         }
         // Clean up
         Console.WriteLine("Press enter to clean up");
@@ -356,13 +360,13 @@ internal class Program
         var context2 = new ProductContext(optionsBuilder.Options);
 
         // Set the isolation level
-        var isoLevel = System.Data.IsolationLevel.ReadUncommitted;
+        var isoLevel = System.Data.IsolationLevel.ReadCommitted;
 
         using var readTransaction = context1.Database.BeginTransaction(isoLevel);
         using var writeTransaction = context2.Database.BeginTransaction();
 
         var writeAction = new Task(() => {
-            var brand = new Brand { Name = "Brand 1", Website = "https://www.brand_2.nl" };
+            var brand = new Brand { Name = "Brand 2222", Website = "https://www.brand_2.nl" };
             context2.Brands.Add(brand);
             context2.SaveChanges();
 
@@ -405,7 +409,7 @@ internal class Program
         var optionsBuilder = new DbContextOptionsBuilder();
         optionsBuilder.UseSqlServer(connectionString);
         var context1 = new ProductContext(optionsBuilder.Options);
-        var brand = new Brand { Name = "Brand 1", Website = "https://www.brand_1.nl" };
+        var brand = new Brand { Name = "Merk 12", Website = "https://www.brand_1.nl" };
         
         var context2 = new ProductContext(optionsBuilder.Options);
         context2.Brands.Add(brand);
@@ -413,13 +417,13 @@ internal class Program
 
         var modifyData = new Task(() => {
             using var writeTransaction = context2.Database.BeginTransaction();
-            brand.Name = "Brand 2";
+            brand.Name = "Merk 22";
             context2.SaveChanges();
             writeTransaction.Commit();
         });
 
         var readData = Task.Run(() => {
-            var isoLevel = System.Data.IsolationLevel.ReadCommitted;
+            var isoLevel = System.Data.IsolationLevel.RepeatableRead;
             using var readTransaction = context1.Database.BeginTransaction(isoLevel);
             var query = context1.Brands.AsNoTracking();
 
@@ -466,7 +470,7 @@ internal class Program
         });
 
         var readData = Task.Run(() => {
-            var isoLevel = System.Data.IsolationLevel.RepeatableRead;
+            var isoLevel = System.Data.IsolationLevel.Serializable;
             using var readTransaction = context1.Database.BeginTransaction(isoLevel);
             var query = context1.Brands.Where(b => b.Name!.StartsWith("Brand ")).AsNoTracking();
 

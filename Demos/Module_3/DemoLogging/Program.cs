@@ -134,6 +134,8 @@ internal class Program
         var options = optionsBuilder.Options;
         var context = new ProductContext(options, NullLogger<ProductContext>.Instance);
 
+        //context.Database.GetDbConnection().CreateCommand()
+
         var prod = context.Products
             .TagWith("SequentialAccess")
             .AsNoTracking()

@@ -3,21 +3,28 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 #pragma warning disable 219, 612, 618
-#nullable enable
+#nullable disable
 
 namespace DemoPerformance
 {
-    internal partial class ProductEntityType
+    [EntityFrameworkInternal]
+    public partial class ProductEntityType
     {
-        public static RuntimeEntityType Create(RuntimeModel model, RuntimeEntityType? baseEntityType = null)
+        public static RuntimeEntityType Create(RuntimeModel model, RuntimeEntityType baseEntityType = null)
         {
             var runtimeEntityType = model.AddEntityType(
                 "DemoPerformance.Product",
                 typeof(Product),
-                baseEntityType);
+                baseEntityType,
+                propertyCount: 6,
+                navigationCount: 5,
+                foreignKeyCount: 2,
+                unnamedIndexCount: 2,
+                keyCount: 1);
 
             var id = runtimeEntityType.AddProperty(
                 "Id",
@@ -25,14 +32,16 @@ namespace DemoPerformance
                 propertyInfo: typeof(Entity).GetProperty("Id", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 fieldInfo: typeof(Entity).GetField("<Id>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 valueGenerated: ValueGenerated.OnAdd,
-                afterSaveBehavior: PropertySaveBehavior.Throw);
+                afterSaveBehavior: PropertySaveBehavior.Throw,
+                sentinel: 0L);
             id.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
             var brandId = runtimeEntityType.AddProperty(
                 "BrandId",
                 typeof(long),
                 propertyInfo: typeof(Product).GetProperty("BrandId", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
-                fieldInfo: typeof(Product).GetField("<BrandId>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly));
+                fieldInfo: typeof(Product).GetField("<BrandId>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                sentinel: 0L);
             brandId.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
 
             var image = runtimeEntityType.AddProperty(
@@ -55,7 +64,8 @@ namespace DemoPerformance
                 "ProductGroupId",
                 typeof(long),
                 propertyInfo: typeof(Product).GetProperty("ProductGroupId", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
-                fieldInfo: typeof(Product).GetField("<ProductGroupId>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly));
+                fieldInfo: typeof(Product).GetField("<ProductGroupId>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                sentinel: 0L);
             productGroupId.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
 
             var timestamp = runtimeEntityType.AddProperty(
@@ -85,8 +95,8 @@ namespace DemoPerformance
 
         public static RuntimeForeignKey CreateForeignKey1(RuntimeEntityType declaringEntityType, RuntimeEntityType principalEntityType)
         {
-            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("BrandId")! },
-                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id")! })!,
+            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("BrandId") },
+                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id") }),
                 principalEntityType,
                 deleteBehavior: DeleteBehavior.Cascade,
                 required: true);
@@ -110,8 +120,8 @@ namespace DemoPerformance
 
         public static RuntimeForeignKey CreateForeignKey2(RuntimeEntityType declaringEntityType, RuntimeEntityType principalEntityType)
         {
-            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("ProductGroupId")! },
-                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id")! })!,
+            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("ProductGroupId") },
+                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id") }),
                 principalEntityType,
                 deleteBehavior: DeleteBehavior.Cascade,
                 required: true);

@@ -2,28 +2,34 @@
 using System;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 #pragma warning disable 219, 612, 618
-#nullable enable
+#nullable disable
 
 namespace DemoPerformance
 {
-    internal partial class ReviewerCredentialEntityType
+    [EntityFrameworkInternal]
+    public partial class ReviewerCredentialEntityType
     {
-        public static RuntimeEntityType Create(RuntimeModel model, RuntimeEntityType? baseEntityType = null)
+        public static RuntimeEntityType Create(RuntimeModel model, RuntimeEntityType baseEntityType = null)
         {
             var runtimeEntityType = model.AddEntityType(
                 "DemoPerformance.ReviewerCredential",
                 typeof(ReviewerCredential),
-                baseEntityType);
+                baseEntityType,
+                propertyCount: 5,
+                foreignKeyCount: 1,
+                keyCount: 1);
 
             var id = runtimeEntityType.AddProperty(
                 "Id",
                 typeof(long),
                 propertyInfo: typeof(Entity).GetProperty("Id", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 fieldInfo: typeof(Entity).GetField("<Id>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
-                afterSaveBehavior: PropertySaveBehavior.Throw);
+                afterSaveBehavior: PropertySaveBehavior.Throw,
+                sentinel: 0L);
             id.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
 
             var passwordHash = runtimeEntityType.AddProperty(
@@ -71,8 +77,8 @@ namespace DemoPerformance
 
         public static RuntimeForeignKey CreateForeignKey1(RuntimeEntityType declaringEntityType, RuntimeEntityType principalEntityType)
         {
-            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("Id")! },
-                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id")! })!,
+            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("Id") },
+                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id") }),
                 principalEntityType,
                 deleteBehavior: DeleteBehavior.Cascade,
                 unique: true,

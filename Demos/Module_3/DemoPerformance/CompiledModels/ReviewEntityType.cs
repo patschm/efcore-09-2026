@@ -3,23 +3,32 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 
 #pragma warning disable 219, 612, 618
-#nullable enable
+#nullable disable
 
 namespace DemoPerformance
 {
-    internal partial class ReviewEntityType
+    [EntityFrameworkInternal]
+    public partial class ReviewEntityType
     {
-        public static RuntimeEntityType Create(RuntimeModel model, RuntimeEntityType? baseEntityType = null)
+        public static RuntimeEntityType Create(RuntimeModel model, RuntimeEntityType baseEntityType = null)
         {
             var runtimeEntityType = model.AddEntityType(
                 "DemoPerformance.Review",
                 typeof(Review),
                 baseEntityType,
-                discriminatorProperty: "ReviewType");
+                discriminatorProperty: "ReviewType",
+                discriminatorValue: ReviewType.Generic,
+                derivedTypesCount: 3,
+                propertyCount: 7,
+                navigationCount: 2,
+                foreignKeyCount: 2,
+                unnamedIndexCount: 2,
+                keyCount: 1);
 
             var id = runtimeEntityType.AddProperty(
                 "Id",
@@ -27,14 +36,16 @@ namespace DemoPerformance
                 propertyInfo: typeof(Entity).GetProperty("Id", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 fieldInfo: typeof(Entity).GetField("<Id>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 valueGenerated: ValueGenerated.OnAdd,
-                afterSaveBehavior: PropertySaveBehavior.Throw);
+                afterSaveBehavior: PropertySaveBehavior.Throw,
+                sentinel: 0L);
             id.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
             var productId = runtimeEntityType.AddProperty(
                 "ProductId",
                 typeof(long),
                 propertyInfo: typeof(Review).GetProperty("ProductId", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
-                fieldInfo: typeof(Review).GetField("<ProductId>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly));
+                fieldInfo: typeof(Review).GetField("<ProductId>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                sentinel: 0L);
             productId.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
 
             var reviewType = runtimeEntityType.AddProperty(
@@ -42,7 +53,9 @@ namespace DemoPerformance
                 typeof(ReviewType),
                 propertyInfo: typeof(Review).GetProperty("ReviewType", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 fieldInfo: typeof(Review).GetField("<ReviewType>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                afterSaveBehavior: PropertySaveBehavior.Throw,
                 valueGeneratorFactory: new DiscriminatorValueGeneratorFactory().Create);
+            reviewType.SetSentinelFromProviderValue(0);
             reviewType.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
 
             var reviewerId = runtimeEntityType.AddProperty(
@@ -57,7 +70,8 @@ namespace DemoPerformance
                 "Score",
                 typeof(byte),
                 propertyInfo: typeof(Review).GetProperty("Score", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
-                fieldInfo: typeof(Review).GetField("<Score>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly));
+                fieldInfo: typeof(Review).GetField("<Score>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                sentinel: (byte)0);
             score.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
 
             var text = runtimeEntityType.AddProperty(
@@ -95,8 +109,8 @@ namespace DemoPerformance
 
         public static RuntimeForeignKey CreateForeignKey1(RuntimeEntityType declaringEntityType, RuntimeEntityType principalEntityType)
         {
-            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("ProductId")! },
-                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id")! })!,
+            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("ProductId") },
+                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id") }),
                 principalEntityType,
                 deleteBehavior: DeleteBehavior.Cascade,
                 required: true);
@@ -120,8 +134,8 @@ namespace DemoPerformance
 
         public static RuntimeForeignKey CreateForeignKey2(RuntimeEntityType declaringEntityType, RuntimeEntityType principalEntityType)
         {
-            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("ReviewerId")! },
-                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id")! })!,
+            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("ReviewerId") },
+                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id") }),
                 principalEntityType);
 
             var reviewer = declaringEntityType.AddNavigation("Reviewer",
@@ -143,8 +157,8 @@ namespace DemoPerformance
 
         public static void CreateAnnotations(RuntimeEntityType runtimeEntityType)
         {
-            runtimeEntityType.AddAnnotation("DiscriminatorValue", ReviewType.Generic);
             runtimeEntityType.AddAnnotation("Relational:FunctionName", null);
+            runtimeEntityType.AddAnnotation("Relational:MappingStrategy", "TPH");
             runtimeEntityType.AddAnnotation("Relational:Schema", "Core");
             runtimeEntityType.AddAnnotation("Relational:SqlQuery", null);
             runtimeEntityType.AddAnnotation("Relational:TableName", "Reviews");

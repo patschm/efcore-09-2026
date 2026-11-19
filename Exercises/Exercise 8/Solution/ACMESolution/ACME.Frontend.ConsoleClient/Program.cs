@@ -3,6 +3,7 @@ using ACME.DataLayer.Repository.SqlServer;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using System.Data;
 using IsolationLevel = System.Data.IsolationLevel;
 
@@ -22,6 +23,7 @@ internal class Program
     {
         var bld = new DbContextOptionsBuilder<ShopDatabaseContext>();
         bld.UseSqlServer(connectionString);
+        bld.LogTo(Console.WriteLine, LogLevel.Information);
         var ctx = new ShopDatabaseContext(bld.Options);
         var id = 0L;
         var signal = new ManualResetEventSlim(false);

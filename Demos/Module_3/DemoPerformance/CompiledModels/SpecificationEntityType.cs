@@ -3,21 +3,28 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 #pragma warning disable 219, 612, 618
-#nullable enable
+#nullable disable
 
 namespace DemoPerformance
 {
-    internal partial class SpecificationEntityType
+    [EntityFrameworkInternal]
+    public partial class SpecificationEntityType
     {
-        public static RuntimeEntityType Create(RuntimeModel model, RuntimeEntityType? baseEntityType = null)
+        public static RuntimeEntityType Create(RuntimeModel model, RuntimeEntityType baseEntityType = null)
         {
             var runtimeEntityType = model.AddEntityType(
                 "DemoPerformance.Specification",
                 typeof(Specification),
-                baseEntityType);
+                baseEntityType,
+                propertyCount: 7,
+                navigationCount: 1,
+                foreignKeyCount: 1,
+                unnamedIndexCount: 1,
+                keyCount: 1);
 
             var id = runtimeEntityType.AddProperty(
                 "Id",
@@ -25,7 +32,8 @@ namespace DemoPerformance
                 propertyInfo: typeof(Entity).GetProperty("Id", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 fieldInfo: typeof(Entity).GetField("<Id>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 valueGenerated: ValueGenerated.OnAdd,
-                afterSaveBehavior: PropertySaveBehavior.Throw);
+                afterSaveBehavior: PropertySaveBehavior.Throw,
+                sentinel: 0L);
             id.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
             var boolValue = runtimeEntityType.AddProperty(
@@ -56,7 +64,8 @@ namespace DemoPerformance
                 "ProductId",
                 typeof(long),
                 propertyInfo: typeof(Specification).GetProperty("ProductId", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
-                fieldInfo: typeof(Specification).GetField("<ProductId>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly));
+                fieldInfo: typeof(Specification).GetField("<ProductId>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                sentinel: 0L);
             productId.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
 
             var stringValue = runtimeEntityType.AddProperty(
@@ -91,8 +100,8 @@ namespace DemoPerformance
 
         public static RuntimeForeignKey CreateForeignKey1(RuntimeEntityType declaringEntityType, RuntimeEntityType principalEntityType)
         {
-            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("ProductId")! },
-                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id")! })!,
+            var runtimeForeignKey = declaringEntityType.AddForeignKey(new[] { declaringEntityType.FindProperty("ProductId") },
+                principalEntityType.FindKey(new[] { principalEntityType.FindProperty("Id") }),
                 principalEntityType,
                 deleteBehavior: DeleteBehavior.Cascade,
                 required: true);

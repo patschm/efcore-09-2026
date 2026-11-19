@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ACME.DataLayer.Entities\ACME.DataLayer.Entities.csproj" />
   </ItemGroup>
 

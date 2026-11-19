@@ -43,7 +43,9 @@ internal class Program
         bld.UseSqlServer(connectionString);
         var ctx = new ShopDatabaseContext(bld.Options);
         // TODO 2: Use Eager Loading to read related data
-        var query = ctx.ProductGroups.Include(p => p.Products).ThenInclude(p => p.Brand);
+        var query = ctx.ProductGroups
+            .Include(p => p.Products)
+                .ThenInclude(p => p.Brand);
 
         foreach (var item in query)
         {
