@@ -1,18 +1,19 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace DemoNavigation;
 
 internal class Program
 {
-    public static string connectionString = @"Server=.\SQLEXPRESS;Database=ShopDatabase;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;";
+    public static string connectionString = @"Server=.\SQLEXPRESS;Database=ProductCatalog2;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;";
 
     static void Main(string[] args)
     {
         //DefaultBehavior();
         //ExplicitLoading();
-        //EagerLoading();
-        //LazyLoading();
-        SplitQueries();
+        EagerLoading();
+       // LazyLoading();
+       // SplitQueries();
     }
 
     private static void DefaultBehavior()
@@ -51,19 +52,30 @@ internal class Program
     {
         var optionsBuilder = new DbContextOptionsBuilder();
         optionsBuilder.UseSqlServer(connectionString);
+        optionsBuilder.LogTo(Console.WriteLine, LogLevel.Information);
         var context = new ProductContext(optionsBuilder.Options);
         var query = context.ProductGroups
             .Include(pg => pg.Products)
                 .ThenInclude(p => p.Brand);
+           // .Include(pg=>pg.Products).The
+                   
 
         foreach (var pgroup in query)
         {
+            pgroup.Name = "Hahah";
             Console.WriteLine(pgroup.Name);
             foreach (var product in pgroup.Products)
             {
                 Console.WriteLine($"\t{product.Brand.Name} {product.Name}");
             }
         }
+
+
+        foreach(var entry in context.ChangeTracker.Entries<Product>())
+        {
+            Console.WriteLine(entry.State);
+        }
+
     }
 
     private static void LazyLoading()
@@ -71,6 +83,7 @@ internal class Program
         var optionsBuilder = new DbContextOptionsBuilder();
         optionsBuilder.UseSqlServer(connectionString);
         optionsBuilder.UseLazyLoadingProxies();
+        optionsBuilder.LogTo(Console.WriteLine, LogLevel.Information);
         var context = new ProductContext(optionsBuilder.Options);
         
         foreach (var pgroup in context.ProductGroups)
@@ -94,9 +107,11 @@ internal class Program
         var context = new ProductContext(optionsBuilder.Options);
 
         var query = context.ProductGroups
+            //.AsSplitQuery()
             .Include(pg => pg.Products)
                 .ThenInclude(p => p.Brand)
-            .AsSplitQuery();
+           .AsSplitQuery();
+            
 
         foreach (var pgroup in query)
         {

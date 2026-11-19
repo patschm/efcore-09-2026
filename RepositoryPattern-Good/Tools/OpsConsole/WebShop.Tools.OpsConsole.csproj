@@ -19,6 +19,7 @@
     <!-- Source-generator based MVVM ([ObservableProperty]/[RelayCommand]) - avoids hand-writing
          INotifyPropertyChanged/ICommand boilerplate across five view models. -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
   </ItemGroup>
 
 </Project>

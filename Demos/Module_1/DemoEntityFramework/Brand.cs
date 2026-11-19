@@ -10,5 +10,5 @@ public class Brand
     public string? Name { get; set; }
     public string? Website { get; set; }
     
-    public virtual ICollection<Product> Products { get; set; }
+    public ICollection<Product> Products { get; set; }
 }

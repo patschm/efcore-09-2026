@@ -6,7 +6,7 @@ namespace DemoLifetime;
 internal class DIPoolingApp : IHostedService
 {
     // AddDbContextPool still registers ProductContext as scoped, and this hosted service is a
-    // singleton, so injecting it directly here is the same captive-dependency issue as DIApp -
+    // singleton, so injecting it directly here is the same captive-dependency issue as DIApp,
     // pooling alone doesn't fix it. Combining pooling with a hosted service needs
     // AddPooledDbContextFactory + IDbContextFactory<ProductContext>, like DIFactoryApp does.
     private ProductContext _context;

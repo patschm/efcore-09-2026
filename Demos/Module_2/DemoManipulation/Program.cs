@@ -7,13 +7,13 @@ namespace DemoManipulation;
 
 internal class Program
 {
-    public static string connectionString = @"Server=.\SQLEXPRESS;Database=ShopDatabase;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;";
+    public static string connectionString = @"Server=.\SQLEXPRESS;Database=ProductCatalog2;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;";
 
     static void Main(string[] args)
     {
         //ChangeTracker();
         //ChangeTrackerV80();
-        Insert();
+        //Insert();
         //Update();
         //UpdateV70();
         //Delete();
@@ -70,14 +70,14 @@ internal class Program
     {
         var optionsBuilder = new DbContextOptionsBuilder();
         optionsBuilder.UseSqlServer(connectionString);
-        optionsBuilder.LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Information);
+       // optionsBuilder.LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Information);
         var context = new ProductContext(optionsBuilder.Options);
         context.Database.EnsureDeleted();
         context.Database.EnsureCreated();
 
         var pg = new ProductGroup { Name = "Testje" } ;
         //context.ProductGroups.Add(pg);
-        var brand = new Brand { Name = "Merkie", Website = "https://brand.nl" };
+        var brand = new Brand { Name = "Merk", Website = "https://brand.nl" };
         //brand.Products.Add(new Product { 
         //    Name = "Heineken", 
         //    ProductGroup = pg});
@@ -121,9 +121,10 @@ internal class Program
 
     private static void Delete()
     {
+        Console.WriteLine(new String('=', 80));
         var optionsBuilder = new DbContextOptionsBuilder();
         optionsBuilder.UseSqlServer(connectionString);
-        optionsBuilder.LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Information);
+        //optionsBuilder.LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Information);
         var context = new ProductContext(optionsBuilder.Options);
         var brand = context.Brands
             .Include(b=>b.Products)
@@ -132,6 +133,15 @@ internal class Program
         ShowStatus(context.Entry(brand));
         context.SaveChanges();
         ShowStatus(context.Entry(brand));
+
+        context.Brands.Attach(brand);
+        ShowStatus(context.Entry(brand));
+        
+        //brand.Id = -1;
+        //context.Entry(brand).State = EntityState.Added;
+        //context.SaveChanges();
+
+
     }
     private static void DeleteV70()
     {
@@ -156,6 +166,7 @@ internal class Program
         ShowStatus(context.Entry(brand));
 
         brand.Name = "Merk";
+
         // Option 1) Re-attach
         context.Attach(brand);
         ShowStatus(context.Entry(brand));
@@ -213,7 +224,13 @@ internal class Program
         //}
         //catch (DbUpdateConcurrencyException ex)
         //{
-        //    ex.Entries
+        //    foreach(var entry in ex.Entries)
+        //    {
+        //        var myValues = entry.CurrentValues;
+        //       var dbValues = entry.GetDatabaseValues()!;
+        //       Console.WriteLine($"In database: {dbValues["Name"]}. Your value: {myValues["Name"]}");
+               
+        //    }
         //}
 
         for (int i = 0; i < 3; i++)
@@ -233,11 +250,16 @@ internal class Program
                     Console.WriteLine($"In database: {dbValues["Name"]}. Your value: {myValues["Name"]}");
                     // Database Wins
                     //entry.CurrentValues.SetValues(dbValues);
-                    
+
                     // Client wins
                     entry.OriginalValues.SetValues(dbValues);
                 }
             }
+            catch (DbUpdateException dup)
+            {
+
+            }
+
         }
     }
 

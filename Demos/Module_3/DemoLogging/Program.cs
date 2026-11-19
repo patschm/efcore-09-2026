@@ -14,15 +14,16 @@ namespace DemoLogging;
 
 internal class Program
 {
-    public static string connectionString = @"Server=.\SQLEXPRESS;Database=ShopDatabase;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=False";
+    public static string connectionString = @"Server=.\SQLEXPRESS;Database=ProductCatalog2;Trusted_Connection=True;TrustServerCertificate=true;MultipleActiveResultSets=true;Encrypt=False";
 
     static void Main(string[] args)
     {
-        Simple();
+        //Simple();
         //Extensions();
         //Events();
         //DiagnosticListeners();
         //Interceptors();
+        InterceptorFun();
     }
 
     private static void Simple()
@@ -124,5 +125,20 @@ internal class Program
             Console.WriteLine($"[{group.Id}] {group.Name}");
         }
         tran.Rollback();
+    }
+    private static void InterceptorFun()
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<ProductContext>();
+        optionsBuilder.UseSqlServer(connectionString);
+        optionsBuilder.AddInterceptors(new SequentialAccesInterceptor());
+        var options = optionsBuilder.Options;
+        var context = new ProductContext(options, NullLogger<ProductContext>.Instance);
+
+        var prod = context.Products
+            .TagWith("SequentialAccess")
+            .AsNoTracking()
+            .Select(x=> new { x.Id, x.Name, x.BrandId, x.Image, x.ProductGroupId })
+            .FirstOrDefault();
+
     }
 }

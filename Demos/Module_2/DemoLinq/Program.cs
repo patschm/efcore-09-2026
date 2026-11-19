@@ -9,22 +9,50 @@ internal class Program
 
     static void Main(string[] args)
     {
-        ViaExtensions();
+        //ViaExtensions();
         //ViaIntegrated();
+        Dangerous();
     }
 
-    private static void ViaExtensions()
+    private static void Dangerous()
     {
         var optionsBuilder = new DbContextOptionsBuilder();
         optionsBuilder.UseSqlServer(connectionString);
         var context = new ProductContext(optionsBuilder.Options);
 
-        var all = context.Brands
-                        .Where(b => b.Name!.StartsWith("C"))
-                        .Join(context.Products, b => b.Id, p => p.BrandId, (b, p) => new { b, p })
-                        .Select(cmp => new {Brand = cmp.b.Name, Product=cmp.p});
+        var result = CreateQuery(context);
+        var data = result.Where(p => p.Name.StartsWith("A"));
 
-        foreach(var item in all)
+        foreach(var dat in data.Take(10))
+            Console.WriteLine(dat.Name);
+    }
+
+    private static IQueryable<Product> CreateQuery(ProductContext context)
+    {
+        return context.Products.OrderBy(p=>p.Name);
+    }
+
+    static bool BrandByC(Brand b)
+    {
+        return b.Name!.StartsWith("C");
+    }
+    private static void ViaExtensions()
+    {
+        //bool BrandByC(Brand b)
+        //{
+        //    return b.Name!.StartsWith("C");
+        //}
+        var optionsBuilder = new DbContextOptionsBuilder();
+        optionsBuilder.UseSqlServer(connectionString);
+        var context = new ProductContext(optionsBuilder.Options);
+
+        var all = context.Brands
+                        .Where(BrandByC)
+                        .Join(context.Products, b => b.Id, p => p.BrandId, (b, p) => new { b, p })
+                        .Select(cmp => new { Brand = cmp.b.Name, Product = cmp.p });
+        var all2 = all.Skip(0).Take(5);
+
+        foreach(var item in all2)
         {
             Console.WriteLine($"{item.Brand} {item.Product.Name}");         
         }

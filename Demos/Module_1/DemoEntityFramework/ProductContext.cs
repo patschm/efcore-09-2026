@@ -13,7 +13,7 @@ namespace DemoEntityFramework
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.HasDefaultSchema("Core");
+           modelBuilder.HasDefaultSchema("Core");
         }
     }
 }

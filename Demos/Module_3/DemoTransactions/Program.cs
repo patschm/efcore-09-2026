@@ -182,10 +182,10 @@ internal class Program
     // Outbox pattern demo, as an alternative to the 2PC-based DistributedTransactions() above: only
     // ONE database is ever touched inside a real transaction (ShopDatabase). The "please replicate
     // this to the backup database" intent is captured as a row in an outbox table, committed in the
-    // SAME local transaction as the business data - an ordinary, single-database ACID commit. A
+    // SAME local transaction as the business data, an ordinary, single-database ACID commit. A
     // separate step (ProcessOutboxMessages, standing in for a background worker/relay) then reads
     // pending outbox rows and does the actual work against the second database, marking each row
-    // processed only once that succeeds. No MSDTC, no cross-database transaction, no blocking - just
+    // processed only once that succeeds. No MSDTC, no cross-database transaction, no blocking, just
     // a local commit plus an at-least-once, retryable follow-up step. That follow-up step is itself
     // two separate local transactions (destination write, then mark-source-processed), so it pairs
     // Outbox with an "inbox" dedup marker on the destination (see ProcessOutboxMessages) to make a
@@ -202,7 +202,7 @@ internal class Program
         backupContext.Database.EnsureCreated();
 
         // EnsureCreated() is a no-op on a database that already exists, so it won't add a new table
-        // to ShopDatabase - create the outbox table directly instead, if it isn't there yet.
+        // to ShopDatabase. Create the outbox table directly instead, if it isn't there yet.
         context.Database.ExecuteSqlRaw(@"
             IF OBJECT_ID('Core.OutboxMessages') IS NULL
             CREATE TABLE Core.OutboxMessages (
@@ -217,7 +217,7 @@ internal class Program
         var brand2 = new Brand { Name = "Brand 2", Website = "https://www.brand_2.nl" };
 
         // Step 1: the business change AND the "replicate this" event go into the SAME local
-        // transaction, against the SAME database - an ordinary single-database ACID commit.
+        // transaction, against the SAME database, an ordinary single-database ACID commit.
         context.Brands.AddRange(brand1, brand2);
         context.OutboxMessages.Add(new OutboxMessage
         {

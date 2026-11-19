@@ -8,5 +8,5 @@ public class Product
     public long BrandId { get; set; }
     public string? Image { get; set; }
     
-    public virtual Brand Brand { get; set; } = null!;
+    public Brand Brand { get; set; } = null!;
 }

@@ -12,11 +12,11 @@ internal class Program
 
     static void Main(string[] args)
     {
-        //DemoOptions();
+        DemoOptions();
         //DemoDirectInit();
-        //DemoDI_Init();
+       // DemoDI_Init();
         //DemoFactoryInit();
-        DemoPooling();
+        //DemoPooling();
     }
 
     
@@ -24,7 +24,8 @@ internal class Program
     {
         var optionsBuilder = new DbContextOptionsBuilder();
         optionsBuilder.UseSqlServer(connectionString, opts =>{
-            opts.MinBatchSize(16);
+            opts.MinBatchSize(1);
+            opts.MaxBatchSize(16);
             opts.CommandTimeout(300);
             opts.EnableRetryOnFailure(2, TimeSpan.FromSeconds(5), null);
         });

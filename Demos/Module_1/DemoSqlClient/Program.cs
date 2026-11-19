@@ -9,10 +9,10 @@ internal class Program
     
     static void Main(string[] args)
     {
-        //ReadData();
+        ReadData();
         //InsertData();
         //UpdateData();
-        DeleteData();
+        //DeleteData();
     }
 
     private static void ReadData()
